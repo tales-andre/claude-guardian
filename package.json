@@ -1,0 +1,45 @@
+{
+  "name": "claude-guardian",
+  "version": "1.0.0",
+  "description": "Enterprise DLP platform for Claude Code — local, auditable, fail-safe",
+  "type": "module",
+  "bin": {
+    "claude-guardian": "./src/cli/index.ts"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "files": [
+    "src/",
+    "public/",
+    "claude-guardian.config.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "node --experimental-strip-types src/cli/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint src",
+    "format": "biome format --write src",
+    "fix": "biome check --write src",
+    "ci": "tsc --noEmit && biome check src && vitest run",
+    "init": "node --experimental-strip-types src/cli/index.ts init",
+    "serve": "node --experimental-strip-types src/cli/index.ts serve"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "commander": "^12.1.0",
+    "fastify": "^4.28.1",
+    "pino": "^9.4.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.4",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.5.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+*.js.map
+
+# Runtime data / databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+logs/
+.dashboard.log
+
+# Config files with potential secrets (commit only the .example version)
+claude-guardian.config.json
+*.config.local.json
+
+# Claude Code local settings (contain local paths and usernames)
+.claude/settings.local.json
+
+# Guardian runtime files
+.guardian-bypass
+.guardian-state
+guardian.pid
+.dashboard.pid
+*.pid
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test artifacts
+coverage/
+.vitest/
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig

@@ -1,0 +1,42 @@
+{
+  "dbPath": "~/.local/share/claude-guardian/guardian.db",
+  "logFile": "~/.local/share/claude-guardian/guardian.log",
+  "logLevel": "info",
+  "dashboardPort": 7734,
+  "dashboardToken": "",
+  "engineTimeoutMs": 500,
+  "policies": [
+    {
+      "id": "block-critical-secrets",
+      "name": "Block critical secrets in all tools",
+      "enabled": true,
+      "dataTypes": ["aws-key", "private-key", "anthropic-key", "openai-key", "github-token"],
+      "minSeverity": "critical",
+      "action": "block"
+    },
+    {
+      "id": "block-high-secrets",
+      "name": "Block high-severity secrets",
+      "enabled": true,
+      "dataTypes": ["gcp-key", "gitlab-token", "jwt", "stripe-key", "slack-token", "connection-string"],
+      "minSeverity": "high",
+      "action": "block"
+    },
+    {
+      "id": "block-generic-secrets",
+      "name": "Block generic secrets and env assignments",
+      "enabled": true,
+      "dataTypes": ["generic-secret"],
+      "minSeverity": "medium",
+      "action": "block"
+    },
+    {
+      "id": "block-pii",
+      "name": "Block PII",
+      "enabled": true,
+      "dataTypes": ["email", "credit-card", "ssn", "cpf", "cnpj", "iban", "phone-br"],
+      "action": "block"
+    }
+  ],
+  "allowlist": []
+}
