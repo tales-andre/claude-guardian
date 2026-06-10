@@ -18,6 +18,18 @@ let tmpDir: string;
 
 beforeAll(() => {
   tmpDir = mkdtempSync(join(tmpdir(), "guardian-adapter-test-"));
+  // Hooks resolve ./claude-guardian.config.json from CWD first, so spawning
+  // them with cwd=tmpDir isolates the tests from the developer's real config,
+  // database, and any .guardian-bypass sentinel in the repo root. Omitted
+  // fields (policies etc.) fall back to schema defaults.
+  writeFileSync(
+    join(tmpDir, "claude-guardian.config.json"),
+    JSON.stringify({
+      dbPath: join(tmpDir, "guardian.db"),
+      logFile: join(tmpDir, "guardian.log"),
+    }),
+    "utf8",
+  );
 });
 
 afterAll(() => {
@@ -43,6 +55,7 @@ function runPreToolHook(
   const result = spawnSync("node", [...NODE_FLAGS, PRE_TOOL_HOOK], {
     input: payload,
     encoding: "utf8",
+    cwd: tmpDir,
     env: { ...process.env, ...opts.env },
     timeout: 10_000,
   });
@@ -64,6 +77,7 @@ function runPromptHook(prompt: string) {
   const result = spawnSync("node", [...NODE_FLAGS, USER_PROMPT_HOOK], {
     input: payload,
     encoding: "utf8",
+    cwd: tmpDir,
     timeout: 10_000,
   });
   const out = result.stdout.trim();
@@ -240,6 +254,7 @@ describe("pre-tool-use hook — malformed input", () => {
     const result = spawnSync("node", [...NODE_FLAGS, PRE_TOOL_HOOK], {
       input: "not valid json",
       encoding: "utf8",
+      cwd: tmpDir,
       timeout: 5000,
     });
     expect(result.status).toBe(0);
@@ -270,9 +285,9 @@ describe("user-prompt-submit hook", () => {
     expect(reason).toMatch(/Incident ID:/);
   });
 
-  it("[allow-canary] bypasses the block", () => {
+  it("[allow-guardian] bypasses the block", () => {
     const { exitCode } = runPromptHook(
-      "[allow-canary] my key is AKIAIOSFODNN7EXAMPLE",
+      "[allow-guardian] my key is AKIAIOSFODNN7EXAMPLE",
     );
     expect(exitCode).toBe(0);
   });
@@ -281,6 +296,7 @@ describe("user-prompt-submit hook", () => {
     const result = spawnSync("node", [...NODE_FLAGS, USER_PROMPT_HOOK], {
       input: "bad json",
       encoding: "utf8",
+      cwd: tmpDir,
       timeout: 5000,
     });
     expect(result.status).toBe(0);
