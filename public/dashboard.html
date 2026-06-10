@@ -555,6 +555,20 @@
       border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; cursor: pointer;
     }
 
+    /* ── Table filters ───────────────────────────────────────────────────────── */
+    .filter-input, .filter-select {
+      background: var(--surface); border: 1px solid var(--border-2);
+      color: var(--text); padding: 6px 10px;
+      border-radius: var(--radius-sm); font-family: inherit; font-size: 12px;
+      transition: border-color .15s;
+    }
+    .filter-input { width: 230px; }
+    .filter-select { cursor: pointer; }
+    .filter-input:focus, .filter-select:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+
     /* ── Chain status ────────────────────────────────────────────────────────── */
     #chain-status { margin-bottom: 16px; }
 
@@ -1061,7 +1075,18 @@
       <div class="tab-content" id="tab-incidents">
         <div class="section-header">
           <h1 class="page-title">Incidents</h1>
-          <button class="btn" onclick="loadIncidents()">↻ Refresh</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input id="incident-search" class="filter-input" type="text" placeholder="Filtrar por tool, usuário, tipo…" oninput="renderIncidents()" />
+            <select id="incident-action-filter" class="filter-select" onchange="renderIncidents()">
+              <option value="">Todas as ações</option>
+              <option value="block">block</option>
+              <option value="require-approval">require-approval</option>
+              <option value="redact">redact</option>
+              <option value="allow">allow</option>
+            </select>
+            <button class="btn" onclick="exportIncidentsCsv()">⤓ CSV</button>
+            <button class="btn" onclick="loadIncidents(true)">↻ Refresh</button>
+          </div>
         </div>
         <div class="card">
           <div class="table-wrap">
@@ -1069,6 +1094,9 @@
               <thead><tr><th>Time</th><th>User</th><th>Tool</th><th>Data Types</th><th>Severities</th><th>Action</th><th></th></tr></thead>
               <tbody id="incidents-table"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
             </table>
+          </div>
+          <div style="display:flex;justify-content:center;margin-top:12px">
+            <button class="btn" id="incidents-more" onclick="loadIncidents(false)" style="display:none">Carregar mais</button>
           </div>
         </div>
       </div>
@@ -1737,31 +1765,68 @@ async function loadRecentIncidents() {
 // ── Incidents ──────────────────────────────────────────────────────────────
 
 let incidentCache = {};
+let incidentRows = [];
+let incidentOffset = 0;
+const INCIDENT_PAGE = 100;
 
-async function loadIncidents() {
+async function loadIncidents(reset = true) {
   try {
-    const res = await apiFetch('/api/incidents?limit=100');
+    if (reset) { incidentRows = []; incidentOffset = 0; incidentCache = {}; }
+    const res = await apiFetch(`/api/incidents?limit=${INCIDENT_PAGE}&offset=${incidentOffset}`);
     const rows = await res.json();
-    incidentCache = {};
     rows.forEach(r => { incidentCache[r.id] = r; });
-    const tbody = document.getElementById('incidents-table');
-    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No incidents</td></tr>'; return; }
-    tbody.innerHTML = rows.map(r => `
-      <tr>
-        <td class="mono">${fmt(r.timestamp)}</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:5px">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <span style="font-size:12px">${escHtml(r.username || '—')}</span>
-          </div>
-        </td>
-        <td>${escHtml(r.tool)}</td>
-        <td>${(r.dataTypes || []).map(t => badge(escHtml(t), 'info')).join(' ')}</td>
-        <td>${(r.severities || []).map(severityBadge).join(' ')}</td>
-        <td>${actionBadge(r.action)}</td>
-        <td><button class="btn" style="font-size:11px;padding:4px 10px" onclick="showIncidentDetails('${r.id}')">Details</button></td>
-      </tr>`).join('');
+    incidentRows = incidentRows.concat(rows);
+    incidentOffset += rows.length;
+    document.getElementById('incidents-more').style.display = rows.length === INCIDENT_PAGE ? '' : 'none';
+    renderIncidents();
   } catch {}
+}
+
+function renderIncidents() {
+  const q = (document.getElementById('incident-search').value || '').trim().toLowerCase();
+  const action = document.getElementById('incident-action-filter').value;
+  const rows = incidentRows.filter(r => {
+    if (action && r.action !== action) return false;
+    if (!q) return true;
+    const hay = [r.tool, r.username, r.id, ...(r.dataTypes || []), ...(r.severities || [])].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+  const tbody = document.getElementById('incidents-table');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">${incidentRows.length ? 'Nenhum incidente corresponde ao filtro' : 'No incidents'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="mono">${fmt(r.timestamp)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span style="font-size:12px">${escHtml(r.username || '—')}</span>
+        </div>
+      </td>
+      <td>${escHtml(r.tool)}</td>
+      <td>${(r.dataTypes || []).map(t => badge(escHtml(t), 'info')).join(' ')}</td>
+      <td>${(r.severities || []).map(severityBadge).join(' ')}</td>
+      <td>${actionBadge(r.action)}</td>
+      <td><button class="btn" style="font-size:11px;padding:4px 10px" onclick="showIncidentDetails('${r.id}')">Details</button></td>
+    </tr>`).join('');
+}
+
+function exportIncidentsCsv() {
+  if (!incidentRows.length) { toast('Nada para exportar', false); return; }
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = ['timestamp', 'user', 'tool', 'dataTypes', 'severities', 'action', 'id'];
+  const lines = [header.join(',')].concat(incidentRows.map(r =>
+    [r.timestamp, r.username || '', r.tool, (r.dataTypes || []).join(';'), (r.severities || []).join(';'), r.action, r.id].map(esc).join(',')
+  ));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `guardian-incidents-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`${incidentRows.length} incidentes exportados`);
 }
 
 function escHtml(s) {
@@ -1873,9 +1938,9 @@ async function loadApprovals() {
     tbody.innerHTML = rows.map(r => `
       <tr>
         <td class="mono">${fmt(r.requestedAt)}</td>
-        <td class="mono" style="font-size:10px">${r.incidentId}</td>
-        <td class="mono" style="font-size:10px">${r.scope}</td>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${r.justification}">${r.justification || '—'}</td>
+        <td class="mono" style="font-size:10px">${escHtml(r.incidentId)}</td>
+        <td class="mono" style="font-size:10px">${escHtml(r.scope)}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${escHtml(r.justification)}">${escHtml(r.justification || '—')}</td>
         <td>${statusBadge(r.status)}</td>
         <td class="mono">${r.expiresAt ? fmt(r.expiresAt) : '—'}</td>
         <td>
@@ -1891,7 +1956,13 @@ async function loadApprovals() {
 
 async function resolveApproval(id, status) {
   try {
-    const ttl = status === 'approved' ? parseInt(prompt('TTL in seconds (default 3600):') || '3600', 10) : undefined;
+    let ttl;
+    if (status === 'approved') {
+      const raw = prompt('TTL em segundos (padrão 3600):', '3600');
+      if (raw === null) return;
+      ttl = parseInt(raw, 10);
+      if (!Number.isFinite(ttl) || ttl <= 0) ttl = 3600;
+    }
     const res = await apiFetch(`/api/approvals/${id}/resolve`, {
       method: 'POST',
       body: JSON.stringify({ status, resolvedBy: 'dashboard-user', ttlSeconds: ttl }),
@@ -1955,14 +2026,14 @@ async function loadPolicies() {
       const isCustom = r.detectorIds && r.detectorIds.length > 0 && r.detectorIds[0].startsWith('custom-');
       const custDet = isCustom ? customDetectorMap[r.detectorIds[0]] : null;
       const detectorCell = custDet
-        ? `<span class="regex-pill" title="${custDet.regex}">${custDet.regex}</span>`
-        : (r.dataTypes||[]).map(t => badge(t, 'info')).join(' ') || (r.detectorIds||[]).map(d => badge(d,'info')).join(' ') || '—';
+        ? `<span class="regex-pill" title="${escHtml(custDet.regex)}">${escHtml(custDet.regex)}</span>`
+        : (r.dataTypes||[]).map(t => badge(escHtml(t), 'info')).join(' ') || (r.detectorIds||[]).map(d => badge(escHtml(d),'info')).join(' ') || '—';
       const deleteBtn = isCustom
         ? `<button class="btn" style="color:var(--critical);border-color:var(--critical-border);font-size:11px" onclick="deleteCustomRule('${r.detectorIds[0]}','${r.id}')">✕</button>`
         : '';
       return `<tr>
-        <td class="mono" style="font-size:11px">${r.id}${isCustom ? '<span class="custom-badge">custom</span>' : ''}</td>
-        <td>${r.name}</td>
+        <td class="mono" style="font-size:11px">${escHtml(r.id)}${isCustom ? '<span class="custom-badge">custom</span>' : ''}</td>
+        <td>${escHtml(r.name)}</td>
         <td style="max-width:260px">${detectorCell}</td>
         <td>${r.minSeverity ? severityBadge(r.minSeverity) : '—'}</td>
         <td>${actionBadge(r.action)}</td>
@@ -2077,7 +2148,11 @@ function addChip(val) {
   ruleExamples.push(clean);
   const chip = document.createElement('span');
   chip.className = 'chip';
-  chip.innerHTML = `${clean} <button class="chip-del" onclick="removeChip(this,'${clean.replace(/'/g,"\\'")}')">×</button>`;
+  const del = document.createElement('button');
+  del.className = 'chip-del';
+  del.textContent = '×';
+  del.onclick = () => removeChip(del, clean);
+  chip.append(document.createTextNode(clean + ' '), del);
   document.getElementById('chip-wrap').insertBefore(chip, document.getElementById('chip-text'));
 }
 
@@ -2245,7 +2320,13 @@ function connectSSE() {
       const data = JSON.parse(e.data);
       if (data.type === 'incident') {
         loadMetrics();
-        if (document.getElementById('tab-incidents').classList.contains('active')) loadIncidents();
+        toast('Novo incidente detectado');
+        if (document.getElementById('tab-incidents').classList.contains('active')) loadIncidents(true);
+      }
+      if (data.type === 'approval') {
+        loadMetrics();
+        if (data.status === 'pending') toast('Nova solicitação de aprovação');
+        if (document.getElementById('tab-approvals').classList.contains('active')) loadApprovals();
       }
     } catch {}
   };

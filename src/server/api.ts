@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import Fastify from "fastify";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import Fastify from "fastify";
+import { saveConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
-import { verifyAuditChain } from "../lib/audit.ts";
 import {
   buildScope,
   createApproval,
@@ -12,10 +12,15 @@ import {
   listApprovals,
   resolveApproval,
 } from "../lib/approval.ts";
+import { verifyAuditChain } from "../lib/audit.ts";
 import { getIncidentById, listIncidents } from "../lib/incident.ts";
-import { saveConfig } from "../config/loader.ts";
 import { generateRegex } from "../lib/regex-generator.ts";
-import type { ApprovalStatus, Config, PolicyAction, PolicyRule } from "../types/index.ts";
+import type {
+  ApprovalStatus,
+  Config,
+  PolicyAction,
+  PolicyRule,
+} from "../types/index.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -65,7 +70,9 @@ export function buildServer(config: Config): FastifyInstance {
       );
       void reply.type("text/html").send(html);
     } catch {
-      void reply.status(503).send("Dashboard file missing. Run: claude-guardian init");
+      void reply
+        .status(503)
+        .send("Dashboard file missing. Run: claude-guardian init");
     }
   });
 
@@ -78,10 +85,15 @@ export function buildServer(config: Config): FastifyInstance {
     "/request-approval/:incidentId",
     (req: FastifyRequest<{ Params: { incidentId: string } }>, reply) => {
       const incident = getIncidentById(db, req.params.incidentId);
-      if (!incident) return void reply.status(404).send("Incidente não encontrado.");
+      if (!incident)
+        return void reply.status(404).send("Incidente não encontrado.");
 
-      const findings: Array<{ severity: string; label: string; detectorId: string; snippet: string }> =
-        JSON.parse(incident.findingsJson);
+      const findings: Array<{
+        severity: string;
+        label: string;
+        detectorId: string;
+        snippet: string;
+      }> = JSON.parse(incident.findingsJson);
       const findingRows = findings
         .map(
           (f) =>
@@ -232,14 +244,21 @@ export function buildServer(config: Config): FastifyInstance {
           .status(400)
           .send({ error: "status must be 'approved' or 'denied'" });
       }
+      const ttl =
+        typeof ttlSeconds === "number" &&
+        Number.isFinite(ttlSeconds) &&
+        ttlSeconds > 0
+          ? ttlSeconds
+          : undefined;
       const updated = resolveApproval(
         db,
         req.params.id,
         status,
         resolvedBy,
-        ttlSeconds,
+        ttl,
       );
       if (!updated) return void reply.status(404).send({ error: "Not found" });
+      broadcast({ type: "approval", status });
       void reply.send(updated);
     },
   );
@@ -274,6 +293,7 @@ export function buildServer(config: Config): FastifyInstance {
         justification,
         ttlSeconds,
       );
+      broadcast({ type: "approval", status: "pending" });
       void reply.status(201).send(approval);
     },
   );
@@ -304,7 +324,9 @@ export function buildServer(config: Config): FastifyInstance {
     (req: FastifyRequest<{ Body: { examples?: string[] } }>, reply) => {
       const { examples } = req.body ?? {};
       if (!Array.isArray(examples) || examples.length < 2) {
-        return void reply.status(400).send({ error: "Mínimo de 2 exemplos necessários" });
+        return void reply
+          .status(400)
+          .send({ error: "Mínimo de 2 exemplos necessários" });
       }
       void reply.send(generateRegex(examples));
     },
@@ -325,38 +347,66 @@ export function buildServer(config: Config): FastifyInstance {
       }>,
       reply,
     ) => {
-      const { name, description = "", regex, action = "block", severity = "high", examples = [] } = req.body ?? {};
+      const {
+        name,
+        description = "",
+        regex,
+        action = "block",
+        severity = "high",
+        examples = [],
+      } = req.body ?? {};
 
       if (!name || !regex) {
-        return void reply.status(400).send({ error: "name e regex são obrigatórios" });
+        return void reply
+          .status(400)
+          .send({ error: "name e regex são obrigatórios" });
       }
 
       try {
         new RegExp(regex);
       } catch (e) {
-        return void reply.status(400).send({ error: `Regex inválida: ${String(e)}` });
+        return void reply
+          .status(400)
+          .send({ error: `Regex inválida: ${String(e)}` });
       }
 
       // Reject regex that matches empty string
       const emptyTest = new RegExp(regex);
       if (emptyTest.test("")) {
-        return void reply.status(400).send({ error: "A regex não pode dar match em string vazia" });
+        return void reply
+          .status(400)
+          .send({ error: "A regex não pode dar match em string vazia" });
       }
 
       const existing = db
         .prepare("SELECT id FROM custom_detectors WHERE regex = ?")
         .get(regex) as { id: string } | undefined;
       if (existing) {
-        return void reply.status(409).send({ error: "Já existe uma regra com essa regex", existingId: existing.id });
+        return void reply.status(409).send({
+          error: "Já existe uma regra com essa regex",
+          existingId: existing.id,
+        });
       }
 
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const slug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
       const detectorId = `custom-${slug}-${Date.now().toString(36)}`;
       const ruleId = `rule-${detectorId}`;
 
       db.prepare(
         "INSERT INTO custom_detectors (id, name, description, regex, severity, action, created_at, examples_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(detectorId, name, description, regex, severity, action, new Date().toISOString(), JSON.stringify(examples));
+      ).run(
+        detectorId,
+        name,
+        description,
+        regex,
+        severity,
+        action,
+        new Date().toISOString(),
+        JSON.stringify(examples),
+      );
 
       const newRule: PolicyRule = {
         id: ruleId,
@@ -382,7 +432,9 @@ export function buildServer(config: Config): FastifyInstance {
     "/api/policies/custom/:id",
     (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
       const { id } = req.params;
-      const row = db.prepare("SELECT id FROM custom_detectors WHERE id = ?").get(id);
+      const row = db
+        .prepare("SELECT id FROM custom_detectors WHERE id = ?")
+        .get(id);
       if (!row) return void reply.status(404).send({ error: "Not found" });
 
       db.prepare("DELETE FROM custom_detectors WHERE id = ?").run(id);
@@ -425,15 +477,11 @@ export function buildServer(config: Config): FastifyInstance {
       .all() as { day: string; n: number }[];
     const pending = (
       db
-        .prepare(
-          "SELECT COUNT(*) as n FROM approvals WHERE status = 'pending'",
-        )
+        .prepare("SELECT COUNT(*) as n FROM approvals WHERE status = 'pending'")
         .get() as { n: number }
     ).n;
     const auditEntries = (
-      db
-        .prepare("SELECT COUNT(*) as n FROM audit_log")
-        .get() as { n: number }
+      db.prepare("SELECT COUNT(*) as n FROM audit_log").get() as { n: number }
     ).n;
 
     void reply.send({
@@ -463,6 +511,46 @@ export function buildServer(config: Config): FastifyInstance {
 
   // ── SSE for real-time dashboard updates ────────────────────────────────────
   const sseClients = new Set<FastifyReply>();
+
+  function broadcast(event: Record<string, unknown>): void {
+    const payload = `data: ${JSON.stringify(event)}\n\n`;
+    for (const client of sseClients) {
+      try {
+        client.raw.write(payload);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
+  }
+
+  // Hooks write incidents directly to SQLite from separate processes, so the
+  // server polls for new rows to feed connected SSE clients.
+  let lastIncidentRowid = (
+    db.prepare("SELECT COALESCE(MAX(rowid), 0) AS m FROM incidents").get() as {
+      m: number;
+    }
+  ).m;
+  const incidentPoll = setInterval(() => {
+    if (sseClients.size === 0) return;
+    try {
+      const m = (
+        db
+          .prepare("SELECT COALESCE(MAX(rowid), 0) AS m FROM incidents")
+          .get() as { m: number }
+      ).m;
+      if (m !== lastIncidentRowid) {
+        lastIncidentRowid = m;
+        broadcast({ type: "incident" });
+      }
+    } catch {
+      // DB momentarily unavailable — retry on next tick
+    }
+  }, 3000);
+  incidentPoll.unref();
+  fastify.addHook("onClose", (_instance, done) => {
+    clearInterval(incidentPoll);
+    done();
+  });
 
   fastify.get("/api/events", (_req, reply) => {
     reply.raw.setHeader("Content-Type", "text/event-stream");
