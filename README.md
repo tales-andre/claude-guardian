@@ -76,6 +76,29 @@ claude-guardian serve
 # → Dashboard at http://localhost:7734/dashboard
 ```
 
+## Enterprise Mode
+
+Para distribuir o guardian em todas as máquinas de uma empresa com um
+**dashboard central** para o administrador, PostgreSQL e deploy em
+Docker/EKS — sem mudar nada do modo local acima:
+
+```bash
+# Servidor central (Docker Compose)
+cp deploy/docker.env.example .guardian.env   # edite os valores
+docker compose --env-file .guardian.env up -d
+
+# Em cada máquina de desenvolvedor
+bash enterprise/install-agent.sh \
+  --server https://guardian.empresa.com --key <GUARDIAN_AGENT_KEY>
+```
+
+Os hooks continuam decidindo localmente (mesma latência); incidentes são
+espelhados ao servidor central via fila store-and-forward e as aprovações são
+concedidas pelo admin no dashboard central. Segredos brutos nunca saem da
+máquina de origem.
+
+Guia completo (EKS/Helm, RDS, modelo de segurança): [docs/ENTERPRISE.md](docs/ENTERPRISE.md)
+
 ## Hook Registration (Manual)
 
 If you prefer to register hooks manually, add to `~/.claude/settings.json`:

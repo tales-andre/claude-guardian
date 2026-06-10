@@ -1,0 +1,13 @@
+apiVersion: v2
+name: claude-guardian
+description: >-
+  Servidor central do claude-guardian — dashboard de governança DLP e API de
+  ingestão para os agentes instalados nas máquinas dos desenvolvedores.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - dlp
+  - security
+  - claude-code
+home: https://github.com/talesvalcacer/claude-guardian

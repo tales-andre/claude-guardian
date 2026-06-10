@@ -11,6 +11,8 @@ interface InitOptions {
   config?: string;
   showToken?: boolean;
   hooksDir?: string;
+  centralUrl?: string;
+  centralKey?: string;
 }
 
 export async function cmdInit(opts: InitOptions): Promise<void> {
@@ -22,13 +24,29 @@ export async function cmdInit(opts: InitOptions): Promise<void> {
 
   // 2. Load or create config, inject a new token if missing.
   let config = loadConfig(configPath);
+  let dirty = false;
   if (!config.dashboardToken) {
     config = { ...config, dashboardToken: randomBytes(24).toString("hex") };
+    dirty = true;
+  }
+  // Modo enterprise: aponta os hooks desta máquina para o servidor central.
+  if (opts.centralUrl) {
+    config = { ...config, centralUrl: opts.centralUrl.replace(/\/+$/, "") };
+    dirty = true;
+  }
+  if (opts.centralKey) {
+    config = { ...config, centralApiKey: opts.centralKey };
+    dirty = true;
+  }
+  if (dirty) {
     mkdirSync(dirname(configPath), { recursive: true });
     writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
     console.log(`✓ Config written to ${configPath}`);
   } else {
     console.log(`✓ Using existing config at ${configPath}`);
+  }
+  if (config.centralUrl) {
+    console.log(`✓ Central server: ${config.centralUrl}`);
   }
 
   // 3. Initialize SQLite database.

@@ -17,6 +17,11 @@ import {
 } from "../lib/approval.ts";
 import { appendAuditEntry } from "../lib/audit.ts";
 import {
+  dashboardBaseUrl,
+  fetchActiveCentralApproval,
+  reportToCentral,
+} from "../lib/central.ts";
+import {
   buildBlockReason,
   extractExceptionRequest,
   recordIncident,
@@ -39,6 +44,10 @@ let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk: string) => (raw += chunk));
 process.stdin.on("end", () => {
+  void main();
+});
+
+async function main(): Promise<void> {
   const config = loadConfig();
   let data: HookInput;
 
@@ -107,6 +116,7 @@ process.stdin.on("end", () => {
       tool: "UserPromptSubmit",
       dataTypes: incident.dataTypes,
     });
+    reportToCentral(config, incident, findings, null, "redact");
     process.exit(0);
   }
 
@@ -115,6 +125,8 @@ process.stdin.on("end", () => {
   const scope = buildScope("UserPromptSubmit", dataTypes);
   const active = findActiveApproval(db, scope);
   if (active) process.exit(0);
+  // Modo enterprise: aprovações são concedidas no dashboard central.
+  if (await fetchActiveCentralApproval(config, scope)) process.exit(0);
 
   // ── [request-exception: motivo] — usuário solicita exceção inline ──────────
   const exceptionRequest = extractExceptionRequest(prompt);
@@ -140,6 +152,7 @@ process.stdin.on("end", () => {
       reason: exceptionRequest,
       requestedBy: "user-prompt-tag",
     });
+    reportToCentral(config, incident, findings, approval, "approval-requested");
 
     const reason = [
       "claude-guardian: solicitação de exceção registrada",
@@ -170,13 +183,14 @@ process.stdin.on("end", () => {
     dataTypes: incident.dataTypes,
     severities: incident.severities,
   });
+  reportToCentral(config, incident, findings, null, "block");
 
   const reason = buildBlockReason(
     "UserPromptSubmit",
     findings,
     incident.id,
-    config.dashboardPort,
+    dashboardBaseUrl(config),
   );
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   process.exit(2);
-});
+}

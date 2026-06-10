@@ -33,6 +33,10 @@ export const DEFAULT_CONFIG: Config = {
   dashboardPort: 7734,
   dashboardToken: "",
   engineTimeoutMs: 500,
+  databaseUrl: "",
+  agentApiKey: "",
+  centralUrl: "",
+  centralApiKey: "",
   policies: [
     {
       id: "block-critical-secrets",

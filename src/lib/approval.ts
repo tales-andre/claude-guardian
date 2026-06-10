@@ -57,12 +57,17 @@ export function resolveApproval(
     .get(id);
   if (!approval) return null;
 
+  // A linha vem crua do SQLite (snake_case), então o TTL persistido está em
+  // ttl_seconds — approval.ttlSeconds só existe em objetos construídos em JS.
+  const storedTtl = Number(
+    (approval as unknown as Record<string, unknown>)["ttl_seconds"] ??
+      approval.ttlSeconds ??
+      3600,
+  );
   const resolvedAt = new Date().toISOString();
   const expiresAt =
     status === "approved"
-      ? new Date(
-          Date.now() + (ttlSeconds ?? approval.ttlSeconds) * 1000,
-        ).toISOString()
+      ? new Date(Date.now() + (ttlSeconds ?? storedTtl) * 1000).toISOString()
       : null;
 
   db.prepare(

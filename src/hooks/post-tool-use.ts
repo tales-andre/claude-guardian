@@ -10,6 +10,7 @@ import { getDb } from "../db/client.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
 import { scanSync } from "../engine/index.ts";
 import { appendAuditEntry } from "../lib/audit.ts";
+import { reportToCentral } from "../lib/central.ts";
 import { recordIncident } from "../lib/incident.ts";
 import { evaluatePolicy } from "../lib/policy.ts";
 
@@ -77,6 +78,7 @@ process.stdin.on("end", () => {
       tool,
       dataTypes: incident.dataTypes,
     });
+    reportToCentral(config, incident, findings, null, "post-tool-response");
   } catch {
     // Never let post-hook errors propagate — the tool already executed.
   }

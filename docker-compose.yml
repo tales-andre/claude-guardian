@@ -1,0 +1,40 @@
+# claude-guardian — servidor central com PostgreSQL
+#
+# Uso:
+#   cp deploy/docker.env.example .guardian.env   # edite os valores
+#   docker compose --env-file .guardian.env up -d
+#
+# Dashboard: http://localhost:7734/dashboard (token = GUARDIAN_DASHBOARD_TOKEN)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guardian
+      POSTGRES_USER: guardian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+    volumes:
+      - guardian-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guardian -d guardian"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guardian:
+    build: .
+    image: claude-guardian:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://guardian:${POSTGRES_PASSWORD}@postgres:5432/guardian
+      GUARDIAN_DASHBOARD_TOKEN: ${GUARDIAN_DASHBOARD_TOKEN:?defina GUARDIAN_DASHBOARD_TOKEN}
+      GUARDIAN_AGENT_KEY: ${GUARDIAN_AGENT_KEY:?defina GUARDIAN_AGENT_KEY}
+    ports:
+      - "${GUARDIAN_PORT:-7734}:7734"
+
+volumes:
+  guardian-pgdata:

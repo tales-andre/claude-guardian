@@ -1,0 +1,78 @@
+# Valores padrão do chart claude-guardian.
+#
+# Instalação típica em EKS com RDS:
+#   helm install guardian deploy/helm/claude-guardian \
+#     --set database.url="postgres://user:pass@meu-rds:5432/guardian" \
+#     --set auth.dashboardToken="$(openssl rand -hex 24)" \
+#     --set auth.agentKey="$(openssl rand -hex 24)" \
+#     --set ingress.enabled=true \
+#     --set ingress.host=guardian.minhaempresa.com
+
+replicaCount: 1
+
+image:
+  repository: claude-guardian
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# ── Banco de dados ─────────────────────────────────────────────────────────────
+# Em produção use um Postgres gerenciado (RDS/Aurora). Informe a URL aqui OU
+# referencie um Secret já existente (recomendado para não versionar credencial).
+database:
+  # postgres://user:senha@host:5432/guardian
+  url: ""
+  # Secret existente contendo a chave abaixo (tem precedência sobre .url)
+  existingSecret: ""
+  existingSecretKey: "DATABASE_URL"
+
+# ── Autenticação ───────────────────────────────────────────────────────────────
+auth:
+  # Token do dashboard (admin). Obrigatório se existingSecret vazio.
+  dashboardToken: ""
+  # Chave compartilhada dos agentes (hooks nas máquinas dos devs).
+  agentKey: ""
+  # Secret existente com as chaves GUARDIAN_DASHBOARD_TOKEN e GUARDIAN_AGENT_KEY
+  existingSecret: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: alb
+  host: guardian.example.com
+  path: /
+  pathType: Prefix
+  tls: []
+  # Exemplo para AWS Load Balancer Controller (EKS):
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Variáveis de ambiente extras (ex.: GUARDIAN_PORT)
+extraEnv: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # Para IRSA: eks.amazonaws.com/role-arn: arn:aws:iam::...
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

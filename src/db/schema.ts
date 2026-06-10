@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS incidents (
   tool        TEXT NOT NULL,
   session_id  TEXT NOT NULL DEFAULT '',
   username    TEXT NOT NULL DEFAULT '',
+  hostname    TEXT NOT NULL DEFAULT '',
   context     TEXT NOT NULL,
   data_types  TEXT NOT NULL,
   severities  TEXT NOT NULL,
@@ -75,13 +76,18 @@ CREATE INDEX IF NOT EXISTS idx_custom_detectors_created ON custom_detectors(crea
 
 export function applySchema(db: BetterSqlite3.Database): void {
   db.exec(DDL);
-  // Migration: add username column to tables created before this version
+  // Migrations: add columns to tables created before these versions
   const cols = db.prepare("PRAGMA table_info(incidents)").all() as {
     name: string;
   }[];
   if (!cols.some((c) => c.name === "username")) {
     db.exec(
       "ALTER TABLE incidents ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+    );
+  }
+  if (!cols.some((c) => c.name === "hostname")) {
+    db.exec(
+      "ALTER TABLE incidents ADD COLUMN hostname TEXT NOT NULL DEFAULT ''",
     );
   }
 }

@@ -25,12 +25,21 @@ program
     "--hooks-dir <path>",
     "Claude Code config directory (default: ~/.claude)",
   )
+  .option(
+    "--central-url <url>",
+    "Enterprise: central dashboard URL (e.g. https://guardian.company.com)",
+  )
+  .option("--central-key <key>", "Enterprise: agent API key")
   .action(cmdInit);
 
 program
   .command("serve")
   .description("Start the governance dashboard server")
   .option("-p, --port <number>", "Port (overrides config)")
+  .option(
+    "--host <address>",
+    "Bind address (default: 127.0.0.1; use 0.0.0.0 in containers)",
+  )
   .option("--config <path>", "Config file path")
   .action(cmdServe);
 

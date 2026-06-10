@@ -96,6 +96,15 @@ Auth: `X-Guardian-Token` header or `?token=` query param checked against `dashbo
 
 Three tables: `incidents`, `approvals`, `audit_log`. `getDb()` opens (or creates) the SQLite file and applies the schema DDL idempotently on first call. The `incidents.findings` column stores JSON — raw values are excluded before storage.
 
+### Enterprise mode (`src/server/store.ts`, `src/lib/central.ts`)
+
+Additive central-server mode; local mode is unchanged when the new config fields are empty.
+
+- **Server storage**: `buildServer` uses the async `GuardianStore` interface — `SqliteStore` (wraps the sync libs, default) or `PgStore` (when `databaseUrl`/`DATABASE_URL` is set; mirrored schema, own hash chain). Hooks never use this layer.
+- **Agent endpoints**: `POST /api/agent/ingest` (idempotent upsert; findings arrive without `rawValue`) and `GET /api/agent/approvals/active?scope=`, both authed by `X-Guardian-Agent-Key` against `agentApiKey` (fail-closed when unset).
+- **Client side**: when `centralUrl`+`centralApiKey` are configured, hooks mirror incidents/approvals via a disk outbox (`<db-dir>/outbox/`) flushed by a detached `central-flush.ts` process (store-and-forward, zero added latency), and check the central server for active approvals before re-blocking (1.5 s timeout, silent fallback to local).
+- **Deploy**: `Dockerfile` + `docker-compose.yml` (Postgres) + Helm chart in `deploy/helm/claude-guardian` (EKS/ALB/RDS). Client rollout via `enterprise/install-agent.sh --server <url> --key <agent-key>` (wraps `init --central-url --central-key`). Docs: `docs/ENTERPRISE.md`.
+
 ## Key behaviors to know
 
 - **`[allow-guardian]`** in the user's last message bypasses `pre-tool-use` entirely (checked by reading the transcript JSONL).

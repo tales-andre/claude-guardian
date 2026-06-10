@@ -1,0 +1,22 @@
+claude-guardian instalado!
+
+1. Acesse o dashboard:
+{{- if .Values.ingress.enabled }}
+     https://{{ .Values.ingress.host }}/dashboard
+{{- else }}
+     kubectl port-forward svc/{{ include "claude-guardian.fullname" . }} 7734:{{ .Values.service.port }}
+     http://localhost:7734/dashboard
+{{- end }}
+   Token: valor de GUARDIAN_DASHBOARD_TOKEN no secret
+     {{ .Values.auth.existingSecret | default (printf "%s-auth" (include "claude-guardian.fullname" .)) }}
+
+2. Instale o agente nas máquinas dos desenvolvedores:
+     bash enterprise/install-agent.sh \
+       --server https://{{ .Values.ingress.host }} \
+       --key <GUARDIAN_AGENT_KEY>
+
+{{- if not (or .Values.database.url .Values.database.existingSecret) }}
+
+AVISO: nenhum banco configurado — o servidor está usando SQLite efêmero
+dentro do pod. Para produção configure database.url (RDS/Aurora Postgres).
+{{- end }}

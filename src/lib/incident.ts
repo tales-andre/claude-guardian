@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { userInfo } from "node:os";
+import { hostname as osHostname, userInfo } from "node:os";
 import type BetterSqlite3 from "better-sqlite3";
 import { redact } from "../engine/utils.ts";
 import type {
@@ -40,6 +40,14 @@ function getSystemUsername(): string {
   }
 }
 
+function getSystemHostname(): string {
+  try {
+    return osHostname();
+  } catch {
+    return "";
+  }
+}
+
 function contextFromFindings(
   findings: DetectorFinding[],
   tool: string,
@@ -59,6 +67,7 @@ export function recordIncident(
   const id = randomBytes(12).toString("hex");
   const timestamp = new Date().toISOString();
   const username = getSystemUsername();
+  const hostname = getSystemHostname();
   const dataTypes = [...new Set(findings.map((f) => f.dataType))] as DataType[];
   const severities = [
     ...new Set(findings.map((f) => f.severity)),
@@ -67,14 +76,15 @@ export function recordIncident(
   const findingsJson = JSON.stringify(findings.map(toStoredFinding));
 
   db.prepare(
-    `INSERT INTO incidents(id, timestamp, tool, session_id, username, context, data_types, severities, findings, action, approval_id)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO incidents(id, timestamp, tool, session_id, username, hostname, context, data_types, severities, findings, action, approval_id)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     timestamp,
     tool,
     sessionId,
     username,
+    hostname,
     context,
     JSON.stringify(dataTypes),
     JSON.stringify(severities),
@@ -89,6 +99,7 @@ export function recordIncident(
     tool,
     sessionId,
     username,
+    hostname,
     context,
     dataTypes,
     severities,
@@ -131,6 +142,7 @@ function rowToIncident(row: Record<string, unknown>): Incident {
     tool: String(row["tool"]),
     sessionId: String(row["session_id"]),
     username: String(row["username"] ?? ""),
+    hostname: String(row["hostname"] ?? ""),
     context: String(row["context"]),
     dataTypes: JSON.parse(String(row["data_types"])) as DataType[],
     severities: JSON.parse(String(row["severities"])) as Severity[],
@@ -150,7 +162,7 @@ export function buildBlockReason(
   tool: string,
   findings: DetectorFinding[],
   incidentId: string,
-  dashboardPort = 7734,
+  dashboardUrl = "http://localhost:7734",
 ): string {
   const lines = findings.map(
     (f) =>
@@ -164,7 +176,7 @@ export function buildBlockReason(
     `Incident ID: ${incidentId}`,
     "",
     "Para solicitar a liberação, acesse:",
-    `  http://localhost:${dashboardPort}/request-approval/${incidentId}`,
+    `  ${dashboardUrl}/request-approval/${incidentId}`,
     "",
     "Após aprovação pelo administrador, repita o prompt normalmente.",
   ].join("\n");
@@ -174,7 +186,7 @@ export function buildApprovalBlockReason(
   tool: string,
   findings: DetectorFinding[],
   incidentId: string,
-  dashboardPort = 7734,
+  dashboardUrl = "http://localhost:7734",
 ): string {
   const lines = findings.map(
     (f) =>
@@ -188,7 +200,7 @@ export function buildApprovalBlockReason(
     `Incident ID: ${incidentId}`,
     "",
     "Para solicitar a liberação, acesse:",
-    `  http://localhost:${dashboardPort}/request-approval/${incidentId}`,
+    `  ${dashboardUrl}/request-approval/${incidentId}`,
     "",
     "Após aprovação pelo administrador, repita o prompt normalmente.",
   ].join("\n");

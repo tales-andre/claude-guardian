@@ -1788,7 +1788,7 @@ function renderIncidents() {
   const rows = incidentRows.filter(r => {
     if (action && r.action !== action) return false;
     if (!q) return true;
-    const hay = [r.tool, r.username, r.id, ...(r.dataTypes || []), ...(r.severities || [])].join(' ').toLowerCase();
+    const hay = [r.tool, r.username, r.hostname, r.id, ...(r.dataTypes || []), ...(r.severities || [])].join(' ').toLowerCase();
     return hay.includes(q);
   });
   const tbody = document.getElementById('incidents-table');
@@ -1802,7 +1802,7 @@ function renderIncidents() {
       <td>
         <div style="display:flex;align-items:center;gap:5px">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--muted);flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span style="font-size:12px">${escHtml(r.username || '—')}</span>
+          <span style="font-size:12px">${escHtml(r.username || '—')}${r.hostname ? `<span style="color:var(--muted)">@${escHtml(r.hostname)}</span>` : ''}</span>
         </div>
       </td>
       <td>${escHtml(r.tool)}</td>

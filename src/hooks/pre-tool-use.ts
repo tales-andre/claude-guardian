@@ -23,6 +23,11 @@ import {
 } from "../lib/approval.ts";
 import { appendAuditEntry } from "../lib/audit.ts";
 import {
+  dashboardBaseUrl,
+  fetchActiveCentralApproval,
+  reportToCentral,
+} from "../lib/central.ts";
+import {
   buildApprovalBlockReason,
   buildBlockReason,
   recordIncident,
@@ -159,6 +164,10 @@ let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk: string) => (raw += chunk));
 process.stdin.on("end", () => {
+  void main();
+});
+
+async function main(): Promise<never> {
   const config = loadConfig();
   let data: HookInput;
 
@@ -176,6 +185,7 @@ process.stdin.on("end", () => {
 
   const db = getDb(config.dbPath);
   const customDetectors = loadCustomDetectors(db);
+  const dashUrl = dashboardBaseUrl(config);
 
   function doBlock(findings: DetectorFinding[]): string {
     const incident = recordIncident(db, tool, sessionId, findings, "block");
@@ -185,10 +195,11 @@ process.stdin.on("end", () => {
       dataTypes: incident.dataTypes,
       severities: incident.severities,
     });
+    reportToCentral(config, incident, findings, null, "block");
     return incident.id;
   }
 
-  function scanAndDecide(text: string, source: string): void {
+  async function scanAndDecide(text: string, source: string): Promise<void> {
     const { findings, timedOut } = scanSync(text, {
       timeoutMs: config.engineTimeoutMs,
       allowlist: config.allowlist,
@@ -212,6 +223,9 @@ process.stdin.on("end", () => {
       ] as DataType[]);
       const active = findActiveApproval(db, scope);
       if (active) return;
+      // Modo enterprise: o admin aprova no dashboard central — consulta lá
+      // antes de bloquear de novo (timeout curto, falha = bloqueia).
+      if (await fetchActiveCentralApproval(config, scope)) return;
       const incident = recordIncident(
         db,
         tool,
@@ -219,7 +233,7 @@ process.stdin.on("end", () => {
         findings,
         "require-approval",
       );
-      createApproval(
+      const approval = createApproval(
         db,
         incident.id,
         scope,
@@ -231,11 +245,14 @@ process.stdin.on("end", () => {
         tool,
         dataTypes: incident.dataTypes,
       });
-      blockAndExit(buildApprovalBlockReason(tool, findings, incident.id));
+      reportToCentral(config, incident, findings, approval, "require-approval");
+      blockAndExit(
+        buildApprovalBlockReason(tool, findings, incident.id, dashUrl),
+      );
     }
 
     const incidentId = doBlock(findings);
-    blockAndExit(buildBlockReason(source, findings, incidentId));
+    blockAndExit(buildBlockReason(source, findings, incidentId, dashUrl));
   }
 
   // ── Read tool ──────────────────────────────────────────────────────────────
@@ -255,12 +272,12 @@ process.stdin.on("end", () => {
         confidence: 1.0,
       };
       const incidentId = doBlock([sentinel]);
-      blockAndExit(buildBlockReason(filePath, [sentinel], incidentId));
+      blockAndExit(buildBlockReason(filePath, [sentinel], incidentId, dashUrl));
     }
 
     const content = readFileSafe(filePath);
     if (!content) allowAndExit();
-    scanAndDecide(content, filePath);
+    await scanAndDecide(content, filePath);
     allowAndExit();
   }
 
@@ -271,10 +288,10 @@ process.stdin.on("end", () => {
     for (const varName of extractEnvNames(command)) {
       const value = process.env[varName];
       if (!value) continue;
-      scanAndDecide(value, `$${varName}`);
+      await scanAndDecide(value, `$${varName}`);
     }
 
-    scanAndDecide(command, "bash command");
+    await scanAndDecide(command, "bash command");
 
     for (const fp of extractReadFilePaths(command)) {
       if (isEnvFile(fp)) {
@@ -289,11 +306,13 @@ process.stdin.on("end", () => {
           confidence: 1.0,
         };
         const incidentId = doBlock([sentinel]);
-        blockAndExit(buildBlockReason(`cat ${fp}`, [sentinel], incidentId));
+        blockAndExit(
+          buildBlockReason(`cat ${fp}`, [sentinel], incidentId, dashUrl),
+        );
       }
       const content = readFileSafe(fp);
       if (!content) continue;
-      scanAndDecide(content, fp);
+      await scanAndDecide(content, fp);
     }
 
     allowAndExit();
@@ -303,9 +322,9 @@ process.stdin.on("end", () => {
   if (tool === "Write" || tool === "Edit") {
     const content =
       tool === "Write" ? (input.content ?? "") : (input.new_string ?? "");
-    if (content) scanAndDecide(content, `${tool} content`);
+    if (content) await scanAndDecide(content, `${tool} content`);
     allowAndExit();
   }
 
   allowAndExit();
-});
+}

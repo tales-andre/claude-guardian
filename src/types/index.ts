@@ -72,12 +72,47 @@ export interface Incident {
   tool: string;
   sessionId: string;
   username: string;
+  hostname: string;
   context: string;
   dataTypes: DataType[];
   severities: Severity[];
   findingsJson: string;
   action: PolicyAction;
   approvalId: string | null;
+}
+
+// ── Agent → central server ingest payload ─────────────────────────────────────
+// Enviado pelos hooks das máquinas-cliente ao servidor central. Os findings
+// NUNCA incluem rawValue — segredos brutos não saem da máquina de origem.
+
+export interface AgentIngestPayload {
+  machine: { hostname: string; username: string };
+  incident: {
+    id: string;
+    timestamp: string;
+    tool: string;
+    sessionId: string;
+    context: string;
+    dataTypes: DataType[];
+    severities: Severity[];
+    findings: Array<{
+      detectorId: string;
+      label: string;
+      dataType: string;
+      severity: string;
+      snippet: string;
+      confidence: number;
+    }>;
+    action: PolicyAction;
+  };
+  approval?: {
+    id: string;
+    scope: string;
+    justification: string;
+    ttlSeconds: number;
+    requestedAt: string;
+  } | null;
+  auditType: string;
 }
 
 // ── Audit log entry (chained hash) ────────────────────────────────────────────
@@ -145,4 +180,13 @@ export interface Config {
   engineTimeoutMs: number;
   policies: PolicyRule[];
   allowlist: AllowlistEntry[];
+  // ── Enterprise (opcional — vazio mantém o modo local intacto) ──────────────
+  /** Servidor: URL de conexão Postgres; vazio = SQLite local. */
+  databaseUrl: string;
+  /** Servidor: chave compartilhada exigida nos endpoints /api/agent/*. */
+  agentApiKey: string;
+  /** Cliente: URL pública do servidor central (ex.: https://guardian.empresa.com). */
+  centralUrl: string;
+  /** Cliente: chave usada pelos hooks para reportar ao servidor central. */
+  centralApiKey: string;
 }

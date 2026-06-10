@@ -36,7 +36,30 @@ const configSchema = z.object({
   engineTimeoutMs: z.number().int().positive().default(500),
   policies: z.array(policyRuleSchema).default(DEFAULT_CONFIG.policies),
   allowlist: z.array(allowlistEntrySchema).default([]),
+  databaseUrl: z.string().default(""),
+  agentApiKey: z.string().default(""),
+  centralUrl: z.string().default(""),
+  centralApiKey: z.string().default(""),
 });
+
+// Overrides de ambiente — permitem configurar o servidor em containers (Docker/
+// EKS) sem arquivo de config, e o agente via script de instalação corporativo.
+function applyEnvOverrides(config: Config): Config {
+  const env = process.env;
+  const port = parseInt(env["GUARDIAN_PORT"] ?? "", 10);
+  return {
+    ...config,
+    dbPath: env["GUARDIAN_DB_PATH"] ?? config.dbPath,
+    dashboardPort:
+      Number.isFinite(port) && port > 0 ? port : config.dashboardPort,
+    dashboardToken: env["GUARDIAN_DASHBOARD_TOKEN"] ?? config.dashboardToken,
+    databaseUrl:
+      env["GUARDIAN_DATABASE_URL"] ?? env["DATABASE_URL"] ?? config.databaseUrl,
+    agentApiKey: env["GUARDIAN_AGENT_KEY"] ?? config.agentApiKey,
+    centralUrl: env["GUARDIAN_CENTRAL_URL"] ?? config.centralUrl,
+    centralApiKey: env["GUARDIAN_CENTRAL_KEY"] ?? config.centralApiKey,
+  };
+}
 
 export function resolveConfigPath(): string {
   const local = join(process.cwd(), "claude-guardian.config.json");
@@ -53,17 +76,17 @@ export function saveConfig(config: Config, overridePath?: string): void {
 export function loadConfig(overridePath?: string): Config {
   const path = overridePath ?? resolveConfigPath();
 
-  if (!existsSync(path)) return DEFAULT_CONFIG;
+  if (!existsSync(path)) return applyEnvOverrides(DEFAULT_CONFIG);
 
   try {
     const raw = readFileSync(path, "utf8");
     const parsed = configSchema.parse(JSON.parse(raw));
-    return {
+    return applyEnvOverrides({
       ...parsed,
       dbPath: expandHome(parsed.dbPath),
       logFile: expandHome(parsed.logFile),
-    } as Config;
+    } as Config);
   } catch {
-    return DEFAULT_CONFIG;
+    return applyEnvOverrides(DEFAULT_CONFIG);
   }
 }

@@ -4,35 +4,45 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import Fastify from "fastify";
 import { saveConfig } from "../config/loader.ts";
-import { getDb } from "../db/client.ts";
-import {
-  buildScope,
-  createApproval,
-  getApprovalById,
-  listApprovals,
-  resolveApproval,
-} from "../lib/approval.ts";
-import { verifyAuditChain } from "../lib/audit.ts";
-import { getIncidentById, listIncidents } from "../lib/incident.ts";
+import { buildScope } from "../lib/approval.ts";
 import { generateRegex } from "../lib/regex-generator.ts";
 import type {
+  AgentIngestPayload,
   ApprovalStatus,
   Config,
   PolicyAction,
   PolicyRule,
 } from "../types/index.ts";
+import { createStore } from "./store.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export function buildServer(config: Config): FastifyInstance {
+export async function buildServer(config: Config): Promise<FastifyInstance> {
   const fastify = Fastify({ logger: false });
-  const db = getDb(config.dbPath);
+  // SQLite local (comportamento original) ou Postgres quando databaseUrl está
+  // configurado (modo central em Docker/EKS).
+  const store = await createStore(config);
 
   // ── Auth middleware ────────────────────────────────────────────────────────
   fastify.addHook(
     "onRequest",
     (req: FastifyRequest, reply: FastifyReply, done) => {
       const url = req.url.split("?")[0] ?? req.url;
+
+      // Endpoints de agente: autenticados exclusivamente pela chave de agente.
+      // Fail-closed: sem agentApiKey configurada, nenhuma máquina ingere dados.
+      if (url.startsWith("/api/agent/")) {
+        const agentKey = req.headers["x-guardian-agent-key"] as
+          | string
+          | undefined;
+        if (config.agentApiKey && agentKey === config.agentApiKey) {
+          done();
+          return;
+        }
+        reply.status(401).send({ error: "Unauthorized agent" });
+        return;
+      }
+
       if (
         url === "/" ||
         url === "/dashboard" ||
@@ -83,8 +93,8 @@ export function buildServer(config: Config): FastifyInstance {
   // ── User-facing approval request page ─────────────────────────────────────
   fastify.get(
     "/request-approval/:incidentId",
-    (req: FastifyRequest<{ Params: { incidentId: string } }>, reply) => {
-      const incident = getIncidentById(db, req.params.incidentId);
+    async (req: FastifyRequest<{ Params: { incidentId: string } }>, reply) => {
+      const incident = await store.getIncidentById(req.params.incidentId);
       if (!incident)
         return void reply.status(404).send("Incidente não encontrado.");
 
@@ -193,33 +203,33 @@ export function buildServer(config: Config): FastifyInstance {
   );
 
   // ── Incidents ──────────────────────────────────────────────────────────────
-  fastify.get("/api/incidents", (req, reply) => {
+  fastify.get("/api/incidents", async (req, reply) => {
     const q = req.query as Record<string, string>;
     const limit = Math.min(parseInt(q["limit"] ?? "50", 10), 500);
     const offset = parseInt(q["offset"] ?? "0", 10);
-    void reply.send(listIncidents(db, limit, offset));
+    void reply.send(await store.listIncidents(limit, offset));
   });
 
   fastify.get(
     "/api/incidents/:id",
-    (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-      const incident = getIncidentById(db, req.params.id);
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+      const incident = await store.getIncidentById(req.params.id);
       if (!incident) return void reply.status(404).send({ error: "Not found" });
       void reply.send(incident);
     },
   );
 
   // ── Approvals ─────────────────────────────────────────────────────────────
-  fastify.get("/api/approvals", (req, reply) => {
+  fastify.get("/api/approvals", async (req, reply) => {
     const q = req.query as Record<string, string>;
     const status = q["status"] as ApprovalStatus | undefined;
-    void reply.send(listApprovals(db, status));
+    void reply.send(await store.listApprovals(status));
   });
 
   fastify.get(
     "/api/approvals/:id",
-    (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
-      const approval = getApprovalById(db, req.params.id);
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+      const approval = await store.getApprovalById(req.params.id);
       if (!approval) return void reply.status(404).send({ error: "Not found" });
       void reply.send(approval);
     },
@@ -227,7 +237,7 @@ export function buildServer(config: Config): FastifyInstance {
 
   fastify.post(
     "/api/approvals/:id/resolve",
-    (
+    async (
       req: FastifyRequest<{
         Params: { id: string };
         Body: {
@@ -250,8 +260,7 @@ export function buildServer(config: Config): FastifyInstance {
         ttlSeconds > 0
           ? ttlSeconds
           : undefined;
-      const updated = resolveApproval(
-        db,
+      const updated = await store.resolveApproval(
         req.params.id,
         status,
         resolvedBy,
@@ -265,7 +274,7 @@ export function buildServer(config: Config): FastifyInstance {
 
   fastify.post(
     "/api/approvals",
-    (
+    async (
       req: FastifyRequest<{
         Body: {
           incidentId?: string;
@@ -281,13 +290,12 @@ export function buildServer(config: Config): FastifyInstance {
           .status(400)
           .send({ error: "incidentId and justification required" });
       }
-      const incident = getIncidentById(db, incidentId);
+      const incident = await store.getIncidentById(incidentId);
       if (!incident)
         return void reply.status(404).send({ error: "Incident not found" });
 
       const scope = buildScope(incident.tool, incident.dataTypes);
-      const approval = createApproval(
-        db,
+      const approval = await store.createApproval(
         incidentId,
         scope,
         justification,
@@ -298,22 +306,76 @@ export function buildServer(config: Config): FastifyInstance {
     },
   );
 
+  // ── Agent ingest (modo central) ────────────────────────────────────────────
+  // Recebe eventos das máquinas-cliente. Findings chegam sem rawValue — o
+  // cliente remove segredos brutos antes de enviar.
+  fastify.post(
+    "/api/agent/ingest",
+    async (req: FastifyRequest<{ Body: AgentIngestPayload }>, reply) => {
+      const body = req.body ?? ({} as AgentIngestPayload);
+      const inc = body.incident;
+      if (
+        !inc?.id ||
+        !inc.timestamp ||
+        !inc.tool ||
+        !inc.action ||
+        !Array.isArray(inc.findings) ||
+        !body.machine?.hostname
+      ) {
+        return void reply.status(400).send({ error: "invalid payload" });
+      }
+      // Defesa em profundidade: descarta rawValue caso um cliente antigo envie.
+      const sanitized: AgentIngestPayload = {
+        machine: {
+          hostname: String(body.machine.hostname),
+          username: String(body.machine.username ?? ""),
+        },
+        incident: {
+          ...inc,
+          sessionId: String(inc.sessionId ?? ""),
+          context: String(inc.context ?? ""),
+          dataTypes: Array.isArray(inc.dataTypes) ? inc.dataTypes : [],
+          severities: Array.isArray(inc.severities) ? inc.severities : [],
+          findings: inc.findings.map((f) => ({
+            detectorId: String(f.detectorId ?? ""),
+            label: String(f.label ?? ""),
+            dataType: String(f.dataType ?? ""),
+            severity: String(f.severity ?? ""),
+            snippet: String(f.snippet ?? ""),
+            confidence: Number(f.confidence ?? 0),
+          })),
+        },
+        approval: body.approval ?? null,
+        auditType: String(body.auditType ?? "event"),
+      };
+      const result = await store.ingestAgentEvent(sanitized);
+      broadcast({ type: "incident" });
+      if (sanitized.approval)
+        broadcast({ type: "approval", status: "pending" });
+      void reply.status(201).send(result);
+    },
+  );
+
+  // Consulta de aprovação ativa pelos hooks das máquinas-cliente.
+  fastify.get(
+    "/api/agent/approvals/active",
+    async (req: FastifyRequest<{ Querystring: { scope?: string } }>, reply) => {
+      const scope = req.query?.scope ?? "";
+      if (!scope)
+        return void reply.status(400).send({ error: "scope required" });
+      const approval = await store.findActiveApproval(scope);
+      void reply.send({ approval });
+    },
+  );
+
   // ── Policies ───────────────────────────────────────────────────────────────
   fastify.get("/api/policies", (_req, reply) => {
     void reply.send(config.policies);
   });
 
-  fastify.get("/api/policies/custom", (_req, reply) => {
+  fastify.get("/api/policies/custom", async (_req, reply) => {
     try {
-      const rows = db
-        .prepare("SELECT * FROM custom_detectors ORDER BY created_at DESC")
-        .all() as Record<string, unknown>[];
-      void reply.send(
-        rows.map((r) => ({
-          ...r,
-          examples: JSON.parse((r["examples_json"] as string) || "[]"),
-        })),
-      );
+      void reply.send(await store.listCustomDetectors());
     } catch {
       void reply.send([]);
     }
@@ -334,7 +396,7 @@ export function buildServer(config: Config): FastifyInstance {
 
   fastify.post(
     "/api/policies/custom",
-    (
+    async (
       req: FastifyRequest<{
         Body: {
           name?: string;
@@ -378,13 +440,11 @@ export function buildServer(config: Config): FastifyInstance {
           .send({ error: "A regex não pode dar match em string vazia" });
       }
 
-      const existing = db
-        .prepare("SELECT id FROM custom_detectors WHERE regex = ?")
-        .get(regex) as { id: string } | undefined;
-      if (existing) {
+      const existingId = await store.findCustomDetectorIdByRegex(regex);
+      if (existingId) {
         return void reply.status(409).send({
           error: "Já existe uma regra com essa regex",
-          existingId: existing.id,
+          existingId,
         });
       }
 
@@ -395,18 +455,16 @@ export function buildServer(config: Config): FastifyInstance {
       const detectorId = `custom-${slug}-${Date.now().toString(36)}`;
       const ruleId = `rule-${detectorId}`;
 
-      db.prepare(
-        "INSERT INTO custom_detectors (id, name, description, regex, severity, action, created_at, examples_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      ).run(
-        detectorId,
+      await store.createCustomDetector({
+        id: detectorId,
         name,
         description,
         regex,
         severity,
         action,
-        new Date().toISOString(),
-        JSON.stringify(examples),
-      );
+        createdAt: new Date().toISOString(),
+        examples,
+      });
 
       const newRule: PolicyRule = {
         id: ruleId,
@@ -430,14 +488,10 @@ export function buildServer(config: Config): FastifyInstance {
 
   fastify.delete(
     "/api/policies/custom/:id",
-    (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
       const { id } = req.params;
-      const row = db
-        .prepare("SELECT id FROM custom_detectors WHERE id = ?")
-        .get(id);
-      if (!row) return void reply.status(404).send({ error: "Not found" });
-
-      db.prepare("DELETE FROM custom_detectors WHERE id = ?").run(id);
+      const deleted = await store.deleteCustomDetector(id);
+      if (!deleted) return void reply.status(404).send({ error: "Not found" });
 
       const ruleId = `rule-${id}`;
       const idx = config.policies.findIndex((p) => p.id === ruleId);
@@ -454,59 +508,20 @@ export function buildServer(config: Config): FastifyInstance {
   );
 
   // ── Metrics ────────────────────────────────────────────────────────────────
-  fastify.get("/api/metrics", (_req, reply) => {
-    const total = (
-      db.prepare("SELECT COUNT(*) as n FROM incidents").get() as {
-        n: number;
-      }
-    ).n;
-    const byAction = db
-      .prepare("SELECT action, COUNT(*) as n FROM incidents GROUP BY action")
-      .all() as { action: string; n: number }[];
-    const byTool = db
-      .prepare(
-        "SELECT tool, COUNT(*) as n FROM incidents GROUP BY tool ORDER BY n DESC LIMIT 10",
-      )
-      .all() as { tool: string; n: number }[];
-    const byDay = db
-      .prepare(
-        `SELECT DATE(timestamp) as day, COUNT(*) as n FROM incidents
-         WHERE timestamp >= datetime('now', '-30 days')
-         GROUP BY day ORDER BY day DESC`,
-      )
-      .all() as { day: string; n: number }[];
-    const pending = (
-      db
-        .prepare("SELECT COUNT(*) as n FROM approvals WHERE status = 'pending'")
-        .get() as { n: number }
-    ).n;
-    const auditEntries = (
-      db.prepare("SELECT COUNT(*) as n FROM audit_log").get() as { n: number }
-    ).n;
-
-    void reply.send({
-      total,
-      byAction,
-      byTool,
-      byDay,
-      pending,
-      auditEntries,
-    });
+  fastify.get("/api/metrics", async (_req, reply) => {
+    void reply.send(await store.metrics());
   });
 
   // ── Audit log ──────────────────────────────────────────────────────────────
-  fastify.get("/api/audit", (req, reply) => {
+  fastify.get("/api/audit", async (req, reply) => {
     const q = req.query as Record<string, string>;
     const limit = Math.min(parseInt(q["limit"] ?? "50", 10), 500);
     const offset = parseInt(q["offset"] ?? "0", 10);
-    const entries = db
-      .prepare("SELECT * FROM audit_log ORDER BY seq DESC LIMIT ? OFFSET ?")
-      .all(limit, offset);
-    void reply.send(entries);
+    void reply.send(await store.listAudit(limit, offset));
   });
 
-  fastify.get("/api/audit/verify", (_req, reply) => {
-    void reply.send(verifyAuditChain(db));
+  fastify.get("/api/audit/verify", async (_req, reply) => {
+    void reply.send(await store.verifyAuditChain());
   });
 
   // ── SSE for real-time dashboard updates ────────────────────────────────────
@@ -523,33 +538,28 @@ export function buildServer(config: Config): FastifyInstance {
     }
   }
 
-  // Hooks write incidents directly to SQLite from separate processes, so the
-  // server polls for new rows to feed connected SSE clients.
-  let lastIncidentRowid = (
-    db.prepare("SELECT COALESCE(MAX(rowid), 0) AS m FROM incidents").get() as {
-      m: number;
-    }
-  ).m;
+  // Incidents are written by separate processes (local hooks) or other
+  // replicas (central mode), so the server polls for new rows to feed
+  // connected SSE clients.
+  let lastIncidentMark = await store.latestIncidentMark();
   const incidentPoll = setInterval(() => {
     if (sseClients.size === 0) return;
-    try {
-      const m = (
-        db
-          .prepare("SELECT COALESCE(MAX(rowid), 0) AS m FROM incidents")
-          .get() as { m: number }
-      ).m;
-      if (m !== lastIncidentRowid) {
-        lastIncidentRowid = m;
-        broadcast({ type: "incident" });
-      }
-    } catch {
-      // DB momentarily unavailable — retry on next tick
-    }
+    store
+      .latestIncidentMark()
+      .then((m) => {
+        if (m !== lastIncidentMark) {
+          lastIncidentMark = m;
+          broadcast({ type: "incident" });
+        }
+      })
+      .catch(() => {
+        // DB momentarily unavailable — retry on next tick
+      });
   }, 3000);
   incidentPoll.unref();
   fastify.addHook("onClose", (_instance, done) => {
     clearInterval(incidentPoll);
-    done();
+    void store.close().finally(() => done());
   });
 
   fastify.get("/api/events", (_req, reply) => {
