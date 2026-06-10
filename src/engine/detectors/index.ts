@@ -1,5 +1,9 @@
 import { awsAccessKeyDetector, awsSecretKeyDetector } from "./aws.ts";
-import { connectionStringDetector, dsnPasswordDetector } from "./connection-string.ts";
+import {
+  connectionStringDetector,
+  dsnPasswordDetector,
+} from "./connection-string.ts";
+import { gcpApiKeyDetector, gcpServiceAccountDetector } from "./gcp.ts";
 import {
   discordWebhookDetector,
   envAssignmentDetector,
@@ -11,7 +15,6 @@ import {
   telegramBotTokenDetector,
   twilioSidDetector,
 } from "./generic-secret.ts";
-import { gcpApiKeyDetector, gcpServiceAccountDetector } from "./gcp.ts";
 import {
   githubAppSecretDetector,
   githubFineGrainedDetector,
@@ -22,12 +25,27 @@ import {
   gitlabPatDetector,
   gitlabRunnerTokenDetector,
 } from "./gitlab.ts";
-import { ibanDetector } from "./pii-iban.ts";
+import {
+  embeddedKeyDetector,
+  hexHighEntropyDetector,
+  n8nApiKeyDetector,
+} from "./high-entropy.ts";
+import { jwtDetector } from "./jwt.ts";
+import {
+  anthropicKeyDetector,
+  openAiLegacyKeyDetector,
+  openAiProjectKeyDetector,
+} from "./openai.ts";
 import { cnpjDetector, cpfDetector, phoneBrDetector } from "./pii-br.ts";
 import { creditCardDetector } from "./pii-credit-card.ts";
 import { emailDetector } from "./pii-email.ts";
+import { ibanDetector } from "./pii-iban.ts";
 import { privateIpDetector } from "./pii-ip.ts";
-import { phoneJpDetector, phoneUsDetector, postalJpDetector } from "./pii-phone.ts";
+import {
+  phoneJpDetector,
+  phoneUsDetector,
+  postalJpDetector,
+} from "./pii-phone.ts";
 import { ssnDetector } from "./pii-ssn.ts";
 import { privateKeyDetector } from "./private-key.ts";
 import { slackTokenDetector, slackWebhookDetector } from "./slack.ts";
@@ -36,13 +54,6 @@ import {
   stripeSecretKeyDetector,
   stripeWebhookSecretDetector,
 } from "./stripe.ts";
-import {
-  anthropicKeyDetector,
-  openAiLegacyKeyDetector,
-  openAiProjectKeyDetector,
-} from "./openai.ts";
-import { jwtDetector } from "./jwt.ts";
-import { embeddedKeyDetector, hexHighEntropyDetector, n8nApiKeyDetector } from "./high-entropy.ts";
 import type { Detector } from "./types.ts";
 
 export type { Detector };

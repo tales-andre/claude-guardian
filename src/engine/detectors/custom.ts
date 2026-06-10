@@ -1,6 +1,6 @@
 import type BetterSqlite3 from "better-sqlite3";
 import type { Severity } from "../../types/index.ts";
-import { makeFinding, type Detector } from "./types.ts";
+import { type Detector, makeFinding } from "./types.ts";
 
 interface CustomDetectorRow {
   id: string;
@@ -31,11 +31,14 @@ export function loadCustomDetectors(db: BetterSqlite3.Database): Detector[] {
         scan(text: string) {
           const findings = [];
           const localRe = new RegExp(re.source, re.flags);
-          let m: RegExpExecArray | null;
-          while ((m = localRe.exec(text)) !== null) {
+          let m = localRe.exec(text);
+          while (m !== null) {
             const raw = m[0];
             if (!raw) break;
-            findings.push(makeFinding(this, raw, raw, m.index, m.index + raw.length, 0.9));
+            findings.push(
+              makeFinding(this, raw, raw, m.index, m.index + raw.length, 0.9),
+            );
+            m = localRe.exec(text);
           }
           return findings;
         },

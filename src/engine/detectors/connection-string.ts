@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // Database connection strings with embedded credentials.
 // Matched as: scheme://user:password@host — password is the captured group.
@@ -8,8 +8,7 @@ const CONN_RE =
   /(mongodb(?:\+srv)?|mysql|postgres(?:ql)?|redis(?:s)?|mssql|amqp(?:s)?|jdbc:[a-z]+):\/\/([^:\s@]{1,64}):([^@\s]{1,256})@/g;
 
 // DSN-style: key=value pairs with password keyword.
-const DSN_RE =
-  /(?:password|passwd|pwd)\s*=\s*([^;\s]{4,128})/gi;
+const DSN_RE = /(?:password|passwd|pwd)\s*=\s*([^;\s]{4,128})/gi;
 
 export const connectionStringDetector: Detector = {
   id: "connection-string",
@@ -46,7 +45,16 @@ export const dsnPasswordDetector: Detector = {
     for (const m of text.matchAll(DSN_RE)) {
       const raw = m[1];
       if (!raw) continue;
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + m[0].length, 0.8));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + m[0].length,
+          0.8,
+        ),
+      );
     }
     return findings;
   },

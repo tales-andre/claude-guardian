@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // AWS Access Key IDs start with AKIA/ABIA/ACCA/AGPA/AIDA/AROA/AIPA/ANPA/ANVA/ASIA.
 // 20 characters total. Linear regex — no backtracking.
@@ -21,7 +21,14 @@ export const awsAccessKeyDetector: Detector = {
     for (const m of text.matchAll(ACCESS_KEY_RE)) {
       const raw = m[0];
       findings.push(
-        makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97),
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
       );
     }
     return findings;

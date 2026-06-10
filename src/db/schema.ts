@@ -76,8 +76,12 @@ CREATE INDEX IF NOT EXISTS idx_custom_detectors_created ON custom_detectors(crea
 export function applySchema(db: BetterSqlite3.Database): void {
   db.exec(DDL);
   // Migration: add username column to tables created before this version
-  const cols = db.prepare("PRAGMA table_info(incidents)").all() as { name: string }[];
+  const cols = db.prepare("PRAGMA table_info(incidents)").all() as {
+    name: string;
+  }[];
   if (!cols.some((c) => c.name === "username")) {
-    db.exec("ALTER TABLE incidents ADD COLUMN username TEXT NOT NULL DEFAULT ''");
+    db.exec(
+      "ALTER TABLE incidents ADD COLUMN username TEXT NOT NULL DEFAULT ''",
+    );
   }
 }

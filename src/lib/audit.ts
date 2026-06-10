@@ -33,7 +33,13 @@ export function appendAuditEntry(
 
   // Use a placeholder seq to compute the hash, then insert.
   const placeholderSeq = (last?.seq ?? 0) + 1;
-  const hash = computeHash(placeholderSeq, timestamp, type, payloadJson, prevHash);
+  const hash = computeHash(
+    placeholderSeq,
+    timestamp,
+    type,
+    payloadJson,
+    prevHash,
+  );
 
   const result = db
     .prepare<[string, string, string, string, string]>(
@@ -51,11 +57,23 @@ export function appendAuditEntry(
   };
 }
 
-export function verifyAuditChain(
-  db: BetterSqlite3.Database,
-): { valid: boolean; firstTamperedSeq: number | null; totalEntries: number } {
+export function verifyAuditChain(db: BetterSqlite3.Database): {
+  valid: boolean;
+  firstTamperedSeq: number | null;
+  totalEntries: number;
+} {
   const entries = db
-    .prepare<[], { seq: number; timestamp: string; type: string; payload: string; prev_hash: string; hash: string }>(
+    .prepare<
+      [],
+      {
+        seq: number;
+        timestamp: string;
+        type: string;
+        payload: string;
+        prev_hash: string;
+        hash: string;
+      }
+    >(
       "SELECT seq, timestamp, type, payload, prev_hash, hash FROM audit_log ORDER BY seq ASC",
     )
     .all();

@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 const PAT_RE = /gh[pousr]_[A-Za-z0-9]{36,255}/g;
 const FINE_GRAINED_RE = /github_pat_[A-Za-z0-9_]{82}/g;
@@ -15,7 +15,16 @@ export const githubPatDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PAT_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },
@@ -30,7 +39,16 @@ export const githubFineGrainedDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(FINE_GRAINED_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },
@@ -45,7 +63,16 @@ export const githubAppSecretDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(APP_SECRET_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.95));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.95,
+        ),
+      );
     }
     return findings;
   },

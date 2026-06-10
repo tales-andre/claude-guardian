@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // JWT: three base64url segments separated by dots. Header starts with eyJ ({"alg").
 const JWT_RE =
@@ -15,7 +15,9 @@ export const jwtDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(JWT_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9));
+      findings.push(
+        makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9),
+      );
     }
     return findings;
   },

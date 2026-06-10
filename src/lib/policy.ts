@@ -17,7 +17,10 @@ function meetsMinSeverity(
   finding: DetectorFinding,
   minSeverity: Severity,
 ): boolean {
-  return (SEVERITY_ORDER[finding.severity] ?? 0) >= (SEVERITY_ORDER[minSeverity] ?? 0);
+  return (
+    (SEVERITY_ORDER[finding.severity] ?? 0) >=
+    (SEVERITY_ORDER[minSeverity] ?? 0)
+  );
 }
 
 function ruleMatches(
@@ -25,10 +28,14 @@ function ruleMatches(
   finding: DetectorFinding,
   tool: string,
 ): boolean {
-  if (rule.dataTypes && !rule.dataTypes.includes(finding.dataType as DataType)) return false;
-  if (rule.detectorIds && !rule.detectorIds.includes(finding.detectorId)) return false;
-  if (rule.tools && !rule.tools.some((t) => t === "*" || t === tool)) return false;
-  if (rule.minSeverity && !meetsMinSeverity(finding, rule.minSeverity)) return false;
+  if (rule.dataTypes && !rule.dataTypes.includes(finding.dataType as DataType))
+    return false;
+  if (rule.detectorIds && !rule.detectorIds.includes(finding.detectorId))
+    return false;
+  if (rule.tools && !rule.tools.some((t) => t === "*" || t === tool))
+    return false;
+  if (rule.minSeverity && !meetsMinSeverity(finding, rule.minSeverity))
+    return false;
   return true;
 }
 
@@ -69,7 +76,9 @@ export function findApprovalTtl(
   tool: string,
   rules: PolicyRule[],
 ): number {
-  for (const rule of rules.filter((r) => r.enabled && r.action === "require-approval")) {
+  for (const rule of rules.filter(
+    (r) => r.enabled && r.action === "require-approval",
+  )) {
     for (const finding of findings) {
       if (ruleMatches(rule, finding, tool) && rule.ttlSeconds) {
         return rule.ttlSeconds;

@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // US Social Security Number. Excludes invalid area codes (000, 666, 9xx)
 // and serial/group numbers of all zeros.
@@ -15,7 +15,16 @@ export const ssnDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SSN_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw.replace(/[- ]/g, "")), m.index, m.index + raw.length, 0.9));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw.replace(/[- ]/g, "")),
+          m.index,
+          m.index + raw.length,
+          0.9,
+        ),
+      );
     }
     return findings;
   },

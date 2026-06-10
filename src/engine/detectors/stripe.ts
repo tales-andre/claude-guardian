@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 const SECRET_KEY_RE = /sk_(live|test)_[0-9a-zA-Z]{24,}/g;
 const RESTRICTED_KEY_RE = /rk_(live|test)_[0-9a-zA-Z]{24,}/g;
@@ -15,7 +15,16 @@ export const stripeSecretKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SECRET_KEY_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },
@@ -30,7 +39,16 @@ export const stripeRestrictedKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(RESTRICTED_KEY_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },
@@ -45,7 +63,16 @@ export const stripeWebhookSecretDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(WEBHOOK_SECRET_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.95));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.95,
+        ),
+      );
     }
     return findings;
   },

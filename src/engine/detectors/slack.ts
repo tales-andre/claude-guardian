@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 const TOKEN_RE = /xox[baprs]-[0-9a-zA-Z-]{10,72}/g;
 
@@ -17,7 +17,16 @@ export const slackTokenDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(TOKEN_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.93));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.93,
+        ),
+      );
     }
     return findings;
   },
@@ -32,7 +41,16 @@ export const slackWebhookDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(WEBHOOK_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },

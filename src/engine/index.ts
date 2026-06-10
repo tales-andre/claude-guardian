@@ -1,4 +1,8 @@
-import type { AllowlistEntry, DetectorFinding, ScanResult } from "../types/index.ts";
+import type {
+  AllowlistEntry,
+  DetectorFinding,
+  ScanResult,
+} from "../types/index.ts";
 import { BUILT_IN_DETECTORS } from "./detectors/index.ts";
 import type { Detector } from "./detectors/types.ts";
 
@@ -33,7 +37,8 @@ function matchesAllowlist(
   const now = new Date().toISOString();
   for (const entry of allowlist) {
     if (entry.expiresAt && entry.expiresAt < now) continue;
-    if (entry.detectorIds && !entry.detectorIds.includes(finding.detectorId)) continue;
+    if (entry.detectorIds && !entry.detectorIds.includes(finding.detectorId))
+      continue;
     if (entry.isRegex) {
       try {
         if (new RegExp(entry.pattern).test(finding.rawValue)) return true;
@@ -85,15 +90,16 @@ export async function scan(
     return { findings: [], elapsedMs: Date.now() - start, timedOut: true };
   }
 
-  const filtered = dedup(result).filter(
-    (f) => !matchesAllowlist(f, allowlist),
-  );
+  const filtered = dedup(result).filter((f) => !matchesAllowlist(f, allowlist));
 
   return { findings: filtered, elapsedMs: Date.now() - start, timedOut: false };
 }
 
 // Synchronous scan for hook context where async is not needed (must be fast).
-export function scanSync(text: string, options: EngineOptions = {}): ScanResult {
+export function scanSync(
+  text: string,
+  options: EngineOptions = {},
+): ScanResult {
   const { timeoutMs = 500, allowlist = [], extraDetectors = [] } = options;
   const detectors = [...BUILT_IN_DETECTORS, ...extraDetectors];
   const start = Date.now();
@@ -108,7 +114,11 @@ export function scanSync(text: string, options: EngineOptions = {}): ScanResult 
       all.push(...results);
     }
     const filtered = dedup(all).filter((f) => !matchesAllowlist(f, allowlist));
-    return { findings: filtered, elapsedMs: Date.now() - start, timedOut: false };
+    return {
+      findings: filtered,
+      elapsedMs: Date.now() - start,
+      timedOut: false,
+    };
   } catch {
     return { findings: [], elapsedMs: Date.now() - start, timedOut: true };
   }

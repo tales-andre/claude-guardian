@@ -10,8 +10,12 @@ import { getDb } from "../db/client.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import { scanSync } from "../engine/index.ts";
+import {
+  buildScope,
+  createApproval,
+  findActiveApproval,
+} from "../lib/approval.ts";
 import { appendAuditEntry } from "../lib/audit.ts";
-import { buildScope, createApproval, findActiveApproval } from "../lib/approval.ts";
 import {
   buildBlockReason,
   extractExceptionRequest,
@@ -69,7 +73,8 @@ process.stdin.on("end", () => {
     process.stdout.write(
       JSON.stringify({
         decision: "block",
-        reason: "claude-guardian: timeout ao escanear o prompt — bloqueado por segurança",
+        reason:
+          "claude-guardian: timeout ao escanear o prompt — bloqueado por segurança",
       }) + "\n",
     );
     process.exit(2);
@@ -87,9 +92,16 @@ process.stdin.on("end", () => {
       redacted = redacted.split(f.rawValue).join(`[REDACTED:${f.detectorId}]`);
     }
     process.stdout.write(
-      JSON.stringify({ hookSpecificOutput: { updatedPrompt: redacted } }) + "\n",
+      JSON.stringify({ hookSpecificOutput: { updatedPrompt: redacted } }) +
+        "\n",
     );
-    const incident = recordIncident(db, "UserPromptSubmit", sessionId, findings, "redact");
+    const incident = recordIncident(
+      db,
+      "UserPromptSubmit",
+      sessionId,
+      findings,
+      "redact",
+    );
     appendAuditEntry(db, "redact", {
       incidentId: incident.id,
       tool: "UserPromptSubmit",
@@ -107,7 +119,13 @@ process.stdin.on("end", () => {
   // ── [request-exception: motivo] — usuário solicita exceção inline ──────────
   const exceptionRequest = extractExceptionRequest(prompt);
   if (exceptionRequest) {
-    const incident = recordIncident(db, "UserPromptSubmit", sessionId, findings, "block");
+    const incident = recordIncident(
+      db,
+      "UserPromptSubmit",
+      sessionId,
+      findings,
+      "block",
+    );
     const approval = createApproval(
       db,
       incident.id,
@@ -139,7 +157,13 @@ process.stdin.on("end", () => {
   }
 
   // ── Block normal ───────────────────────────────────────────────────────────
-  const incident = recordIncident(db, "UserPromptSubmit", sessionId, findings, action);
+  const incident = recordIncident(
+    db,
+    "UserPromptSubmit",
+    sessionId,
+    findings,
+    action,
+  );
   appendAuditEntry(db, "block", {
     incidentId: incident.id,
     tool: "UserPromptSubmit",
@@ -147,7 +171,12 @@ process.stdin.on("end", () => {
     severities: incident.severities,
   });
 
-  const reason = buildBlockReason("UserPromptSubmit", findings, incident.id, config.dashboardPort);
+  const reason = buildBlockReason(
+    "UserPromptSubmit",
+    findings,
+    incident.id,
+    config.dashboardPort,
+  );
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
   process.exit(2);
 });

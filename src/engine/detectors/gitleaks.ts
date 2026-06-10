@@ -3,8 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Severity } from "../../types/index.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // Gitleaks v8 JSON report entry (subset we consume).
 interface GitleaksLeak {
@@ -21,16 +21,23 @@ interface GitleaksLeak {
 function inferSeverity(ruleId: string, tags: string[]): Severity {
   for (const tag of tags) {
     switch (tag.toLowerCase()) {
-      case "critical": return "critical";
-      case "high": return "high";
-      case "medium": return "medium";
-      case "low": return "low";
+      case "critical":
+        return "critical";
+      case "high":
+        return "high";
+      case "medium":
+        return "medium";
+      case "low":
+        return "low";
     }
   }
   if (/private-key|rsa|dsa|ec-key|openssh|pgp/.test(ruleId)) return "critical";
-  if (/aws.*key|gcp|azure|alibaba|github|gitlab|bitbucket/.test(ruleId)) return "critical";
-  if (/stripe|openai|anthropic|shopify|heroku|paypal|braintree/.test(ruleId)) return "high";
-  if (/slack|sendgrid|mailgun|discord|telegram|twilio|jwt/.test(ruleId)) return "high";
+  if (/aws.*key|gcp|azure|alibaba|github|gitlab|bitbucket/.test(ruleId))
+    return "critical";
+  if (/stripe|openai|anthropic|shopify|heroku|paypal|braintree/.test(ruleId))
+    return "high";
+  if (/slack|sendgrid|mailgun|discord|telegram|twilio|jwt/.test(ruleId))
+    return "high";
   return "medium";
 }
 
@@ -113,7 +120,12 @@ export function scanWithGitleaks(text: string): DetectorFinding[] {
         // Confidence scales with entropy: high-entropy secrets are more reliable.
         const confidence = Math.min(0.97, 0.72 + l.Entropy * 0.05);
         return makeFinding(
-          { id: `gl:${l.RuleID}`, label: l.Description, dataType: "generic-secret", severity: sev },
+          {
+            id: `gl:${l.RuleID}`,
+            label: l.Description,
+            dataType: "generic-secret",
+            severity: sev,
+          },
           l.Secret,
           snippet,
           0,

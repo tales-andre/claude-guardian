@@ -1,5 +1,5 @@
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // PEM-encoded private keys: RSA, EC, DSA, PGP, OpenSSH.
 // The header is enough to positively identify a key block.

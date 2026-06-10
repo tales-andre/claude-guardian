@@ -1,19 +1,27 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
-import { existsSync, openSync, readFileSync, readSync, closeSync, statSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  statSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 if (existsSync(join(process.cwd(), ".guardian-bypass"))) process.exit(0);
+
 import { loadConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
 import { scanSync } from "../engine/index.ts";
-import { appendAuditEntry } from "../lib/audit.ts";
 import {
   buildScope,
   createApproval,
   findActiveApproval,
 } from "../lib/approval.ts";
+import { appendAuditEntry } from "../lib/audit.ts";
 import {
   buildApprovalBlockReason,
   buildBlockReason,
@@ -63,7 +71,9 @@ function readFileSafe(filePath: string): string | null {
       closeSync(fd);
     }
     const nulIdx = buf.indexOf(0);
-    const text = (nulIdx === -1 ? buf : buf.subarray(0, nulIdx)).toString("utf8");
+    const text = (nulIdx === -1 ? buf : buf.subarray(0, nulIdx)).toString(
+      "utf8",
+    );
     return text.length > 0 ? text : null;
   } catch {
     return null;
@@ -76,7 +86,15 @@ function isEnvFile(filePath: string): boolean {
 }
 
 const ENV_VAR_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
-const FILE_READ_CMDS = new Set(["cat", "head", "tail", "less", "more", "bat", "nl"]);
+const FILE_READ_CMDS = new Set([
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "bat",
+  "nl",
+]);
 
 function extractEnvNames(cmd: string): string[] {
   const names = new Set<string>();
@@ -96,10 +114,16 @@ function extractReadFilePaths(command: string): string[] {
     if (!FILE_READ_CMDS.has(cmd)) continue;
     let skip = false;
     for (let i = 1; i < tokens.length; i++) {
-      if (skip) { skip = false; continue; }
+      if (skip) {
+        skip = false;
+        continue;
+      }
       const tok = tokens[i];
       if (!tok || tok.startsWith("-")) continue;
-      if (tok === ">" || tok === ">>" || tok === "<") { skip = true; continue; }
+      if (tok === ">" || tok === ">>" || tok === "<") {
+        skip = true;
+        continue;
+      }
       paths.push(tok);
     }
   }
@@ -121,9 +145,7 @@ function checkAllowTag(transcriptPath: string | undefined): boolean {
         if (msg.role !== "user") continue;
         const text = typeof msg.content === "string" ? msg.content : "";
         return text.includes("[allow-guardian]");
-      } catch {
-        continue;
-      }
+      } catch {}
     }
   } catch {
     // ignore
@@ -174,7 +196,9 @@ process.stdin.on("end", () => {
     });
 
     if (timedOut) {
-      blockAndExit(`claude-guardian: engine timeout scanning ${source} — blocked by default`);
+      blockAndExit(
+        `claude-guardian: engine timeout scanning ${source} — blocked by default`,
+      );
     }
 
     if (findings.length === 0) return;
@@ -183,12 +207,30 @@ process.stdin.on("end", () => {
     if (action === "allow") return;
 
     if (action === "require-approval") {
-      const scope = buildScope(tool, [...new Set(findings.map((f) => f.dataType))] as DataType[]);
+      const scope = buildScope(tool, [
+        ...new Set(findings.map((f) => f.dataType)),
+      ] as DataType[]);
       const active = findActiveApproval(db, scope);
       if (active) return;
-      const incident = recordIncident(db, tool, sessionId, findings, "require-approval");
-      createApproval(db, incident.id, scope, "", findApprovalTtl(findings, tool, config.policies));
-      appendAuditEntry(db, "block-require-approval", { incidentId: incident.id, tool, dataTypes: incident.dataTypes });
+      const incident = recordIncident(
+        db,
+        tool,
+        sessionId,
+        findings,
+        "require-approval",
+      );
+      createApproval(
+        db,
+        incident.id,
+        scope,
+        "",
+        findApprovalTtl(findings, tool, config.policies),
+      );
+      appendAuditEntry(db, "block-require-approval", {
+        incidentId: incident.id,
+        tool,
+        dataTypes: incident.dataTypes,
+      });
       blockAndExit(buildApprovalBlockReason(tool, findings, incident.id));
     }
 
@@ -259,7 +301,8 @@ process.stdin.on("end", () => {
 
   // ── Write / Edit tools ─────────────────────────────────────────────────────
   if (tool === "Write" || tool === "Edit") {
-    const content = tool === "Write" ? (input.content ?? "") : (input.new_string ?? "");
+    const content =
+      tool === "Write" ? (input.content ?? "") : (input.new_string ?? "");
     if (content) scanAndDecide(content, `${tool} content`);
     allowAndExit();
   }

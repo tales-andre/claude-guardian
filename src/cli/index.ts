@@ -1,11 +1,11 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
 import { Command } from "commander";
-import { cmdInit } from "./commands/init.ts";
-import { cmdServe } from "./commands/serve.ts";
-import { cmdScan } from "./commands/scan.ts";
-import { cmdPolicy } from "./commands/policy.ts";
 import { cmdApprove, cmdDeny } from "./commands/approve.ts";
+import { cmdInit } from "./commands/init.ts";
+import { cmdPolicy } from "./commands/policy.ts";
+import { cmdScan } from "./commands/scan.ts";
+import { cmdServe } from "./commands/serve.ts";
 
 const program = new Command();
 
@@ -16,10 +16,15 @@ program
 
 program
   .command("init")
-  .description("Initialize database, generate token, and register Claude Code hooks")
+  .description(
+    "Initialize database, generate token, and register Claude Code hooks",
+  )
   .option("--config <path>", "Config file path")
   .option("--show-token", "Print the dashboard token")
-  .option("--hooks-dir <path>", "Claude Code config directory (default: ~/.claude)")
+  .option(
+    "--hooks-dir <path>",
+    "Claude Code config directory (default: ~/.claude)",
+  )
   .action(cmdInit);
 
 program

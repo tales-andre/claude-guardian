@@ -1,8 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { userInfo } from "node:os";
 import type BetterSqlite3 from "better-sqlite3";
-import type { DataType, DetectorFinding, Incident, PolicyAction, Severity } from "../types/index.ts";
 import { redact } from "../engine/utils.ts";
+import type {
+  DataType,
+  DetectorFinding,
+  Incident,
+  PolicyAction,
+  Severity,
+} from "../types/index.ts";
 
 interface StoredFinding {
   detectorId: string;
@@ -34,7 +40,10 @@ function getSystemUsername(): string {
   }
 }
 
-function contextFromFindings(findings: DetectorFinding[], tool: string): string {
+function contextFromFindings(
+  findings: DetectorFinding[],
+  tool: string,
+): string {
   const types = [...new Set(findings.map((f) => f.label))].join(", ");
   return `${tool}: detected ${types}`;
 }
@@ -51,30 +60,66 @@ export function recordIncident(
   const timestamp = new Date().toISOString();
   const username = getSystemUsername();
   const dataTypes = [...new Set(findings.map((f) => f.dataType))] as DataType[];
-  const severities = [...new Set(findings.map((f) => f.severity))] as Severity[];
+  const severities = [
+    ...new Set(findings.map((f) => f.severity)),
+  ] as Severity[];
   const context = contextFromFindings(findings, tool);
   const findingsJson = JSON.stringify(findings.map(toStoredFinding));
 
   db.prepare(
     `INSERT INTO incidents(id, timestamp, tool, session_id, username, context, data_types, severities, findings, action, approval_id)
      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, timestamp, tool, sessionId, username, context,
-    JSON.stringify(dataTypes), JSON.stringify(severities),
-    findingsJson, action, approvalId);
+  ).run(
+    id,
+    timestamp,
+    tool,
+    sessionId,
+    username,
+    context,
+    JSON.stringify(dataTypes),
+    JSON.stringify(severities),
+    findingsJson,
+    action,
+    approvalId,
+  );
 
-  return { id, timestamp, tool, sessionId, username, context, dataTypes, severities, findingsJson, action, approvalId };
+  return {
+    id,
+    timestamp,
+    tool,
+    sessionId,
+    username,
+    context,
+    dataTypes,
+    severities,
+    findingsJson,
+    action,
+    approvalId,
+  };
 }
 
-export function listIncidents(db: BetterSqlite3.Database, limit = 100, offset = 0): Incident[] {
+export function listIncidents(
+  db: BetterSqlite3.Database,
+  limit = 100,
+  offset = 0,
+): Incident[] {
   return (
-    db.prepare("SELECT * FROM incidents ORDER BY timestamp DESC LIMIT ? OFFSET ?")
+    db
+      .prepare(
+        "SELECT * FROM incidents ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+      )
       .all(limit, offset) as Record<string, unknown>[]
   ).map(rowToIncident);
 }
 
-export function getIncidentById(db: BetterSqlite3.Database, id: string): Incident | null {
+export function getIncidentById(
+  db: BetterSqlite3.Database,
+  id: string,
+): Incident | null {
   const row = db
-    .prepare<[string], Record<string, unknown>>("SELECT * FROM incidents WHERE id = ?")
+    .prepare<[string], Record<string, unknown>>(
+      "SELECT * FROM incidents WHERE id = ?",
+    )
     .get(id);
   return row ? rowToIncident(row) : null;
 }
@@ -108,7 +153,8 @@ export function buildBlockReason(
   dashboardPort = 7734,
 ): string {
   const lines = findings.map(
-    (f) => `  [${f.severity.toUpperCase()}] ${f.label} (${f.detectorId}): ${f.snippet}`,
+    (f) =>
+      `  [${f.severity.toUpperCase()}] ${f.label} (${f.detectorId}): ${f.snippet}`,
   );
   return [
     `claude-guardian bloqueou: dado sensível detectado em ${tool}`,
@@ -131,7 +177,8 @@ export function buildApprovalBlockReason(
   dashboardPort = 7734,
 ): string {
   const lines = findings.map(
-    (f) => `  [${f.severity.toUpperCase()}] ${f.label} (${f.detectorId}): ${f.snippet}`,
+    (f) =>
+      `  [${f.severity.toUpperCase()}] ${f.label} (${f.detectorId}): ${f.snippet}`,
   );
   return [
     `claude-guardian: exceção necessária para ${tool}`,

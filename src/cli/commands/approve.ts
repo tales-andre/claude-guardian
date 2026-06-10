@@ -1,12 +1,12 @@
 import { loadConfig } from "../../config/loader.ts";
 import { getDb } from "../../db/client.ts";
-import { appendAuditEntry } from "../../lib/audit.ts";
 import {
   buildScope,
   createApproval,
   listApprovals,
   resolveApproval,
 } from "../../lib/approval.ts";
+import { appendAuditEntry } from "../../lib/audit.ts";
 import { getIncidentById } from "../../lib/incident.ts";
 
 interface ApproveOptions {
@@ -24,9 +24,7 @@ export async function cmdApprove(
 
   const incident = getIncidentById(db, incidentId);
   if (!incident) {
-    process.stderr.write(
-      `Error: incident '${incidentId}' not found.\n`,
-    );
+    process.stderr.write(`Error: incident '${incidentId}' not found.\n`);
     process.exit(1);
   }
 
@@ -39,15 +37,33 @@ export async function cmdApprove(
 
   let approvalId: string;
   if (existing) {
-    const resolved = resolveApproval(db, existing.id, "approved", "cli", ttlSeconds);
+    const resolved = resolveApproval(
+      db,
+      existing.id,
+      "approved",
+      "cli",
+      ttlSeconds,
+    );
     if (!resolved) {
       process.stderr.write("Error: failed to resolve approval.\n");
       process.exit(1);
     }
     approvalId = existing.id;
   } else {
-    const approval = createApproval(db, incidentId, scope, opts.reason, ttlSeconds);
-    const resolved = resolveApproval(db, approval.id, "approved", "cli", ttlSeconds);
+    const approval = createApproval(
+      db,
+      incidentId,
+      scope,
+      opts.reason,
+      ttlSeconds,
+    );
+    const resolved = resolveApproval(
+      db,
+      approval.id,
+      "approved",
+      "cli",
+      ttlSeconds,
+    );
     if (!resolved) {
       process.stderr.write("Error: failed to create and resolve approval.\n");
       process.exit(1);
@@ -69,7 +85,9 @@ export async function cmdApprove(
   console.log(`  Scope:   ${scope}`);
   console.log(`  TTL:     ${ttlSeconds}s`);
   console.log(`  Expires: ${expiresAt.toISOString()}`);
-  console.log("\nThe next request with the same tool and data types will be allowed.");
+  console.log(
+    "\nThe next request with the same tool and data types will be allowed.",
+  );
 }
 
 interface DenyOptions {

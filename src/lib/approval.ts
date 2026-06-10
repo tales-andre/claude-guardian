@@ -101,7 +101,9 @@ export function listApprovals(
 ): Approval[] {
   if (filter) {
     return db
-      .prepare<[string], Approval>("SELECT * FROM approvals WHERE status = ? ORDER BY requested_at DESC")
+      .prepare<[string], Approval>(
+        "SELECT * FROM approvals WHERE status = ? ORDER BY requested_at DESC",
+      )
       .all(filter);
   }
   return db
@@ -113,5 +115,9 @@ export function getApprovalById(
   db: BetterSqlite3.Database,
   id: string,
 ): Approval | null {
-  return db.prepare<[string], Approval>("SELECT * FROM approvals WHERE id = ?").get(id) ?? null;
+  return (
+    db
+      .prepare<[string], Approval>("SELECT * FROM approvals WHERE id = ?")
+      .get(id) ?? null
+  );
 }

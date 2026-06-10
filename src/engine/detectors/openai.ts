@@ -1,6 +1,6 @@
 import { entropy, redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 const LEGACY_KEY_RE = /sk-(?!proj-|ant-)[A-Za-z0-9]{48}/g;
 const PROJECT_KEY_RE = /sk-proj-[A-Za-z0-9_-]{40,}/g;
@@ -15,7 +15,16 @@ export const openAiLegacyKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(LEGACY_KEY_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.95));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.95,
+        ),
+      );
     }
     return findings;
   },
@@ -31,7 +40,16 @@ export const openAiProjectKeyDetector: Detector = {
     for (const m of text.matchAll(PROJECT_KEY_RE)) {
       const raw = m[0];
       if (entropy(raw) < 3.5) continue;
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.95));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.95,
+        ),
+      );
     }
     return findings;
   },
@@ -46,7 +64,16 @@ export const anthropicKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(ANTHROPIC_KEY_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },

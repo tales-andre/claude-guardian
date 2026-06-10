@@ -1,6 +1,6 @@
 import { redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 const GCP_API_KEY_RE = /AIza[0-9A-Za-z_-]{35}/g;
 
@@ -34,7 +34,14 @@ export const gcpServiceAccountDetector: Detector = {
     for (const m of text.matchAll(GCP_SERVICE_ACCOUNT_RE)) {
       const raw = m[1] ?? m[0];
       findings.push(
-        makeFinding(this, raw, "[GCP service account key]", m.index, m.index + m[0].length, 0.95),
+        makeFinding(
+          this,
+          raw,
+          "[GCP service account key]",
+          m.index,
+          m.index + m[0].length,
+          0.95,
+        ),
       );
     }
     return findings;

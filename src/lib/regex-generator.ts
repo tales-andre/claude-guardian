@@ -55,16 +55,26 @@ function explainSegment(part: string): string | null {
   if (part.startsWith("[A-Z]")) return `${len} letra(s) maiúscula(s)`;
   if (part.startsWith("[a-z]")) return `${len} letra(s) minúscula(s)`;
   if (part.startsWith("[A-Za-z]{")) return `${len} letra(s)`;
-  if (part.startsWith("[A-Za-z0-9]{")) return `${len} caractere(s) alfanumérico(s)`;
+  if (part.startsWith("[A-Za-z0-9]{"))
+    return `${len} caractere(s) alfanumérico(s)`;
   if (part.startsWith(".{")) return `${len} caractere(s) quaisquer`;
   return null;
 }
 
 export function generateRegex(examples: string[]): GenerateResult {
-  const cleaned = [...new Set(examples.map((e) => e.trim()).filter((e) => e.length > 0))];
+  const cleaned = [
+    ...new Set(examples.map((e) => e.trim()).filter((e) => e.length > 0)),
+  ];
 
   if (cleaned.length === 0) {
-    return { regex: ".+", explanation: "Sem exemplos válidos", confidence: "low", matchCount: 0, missCount: 0, warning: "Nenhum exemplo válido fornecido" };
+    return {
+      regex: ".+",
+      explanation: "Sem exemplos válidos",
+      confidence: "low",
+      matchCount: 0,
+      missCount: 0,
+      warning: "Nenhum exemplo válido fornecido",
+    };
   }
 
   if (cleaned.length === 1) {
@@ -128,7 +138,10 @@ export function generateRegex(examples: string[]): GenerateResult {
 
     return {
       regex: regexStr,
-      explanation: explainParts.length > 0 ? `Captura: ${explainParts.join(", seguido de ")}` : "Corresponde ao padrão dos exemplos fornecidos",
+      explanation:
+        explainParts.length > 0
+          ? `Captura: ${explainParts.join(", seguido de ")}`
+          : "Corresponde ao padrão dos exemplos fornecidos",
       confidence: isConsistent ? "high" : "medium",
       matchCount,
       missCount,
@@ -152,13 +165,23 @@ function fallbackPrefixSuffix(examples: string[]): GenerateResult {
     suffix = "";
   }
 
-  const mid = examples.map((e) => e.slice(prefix.length, suffix.length > 0 ? e.length - suffix.length : undefined));
+  const mid = examples.map((e) =>
+    e.slice(
+      prefix.length,
+      suffix.length > 0 ? e.length - suffix.length : undefined,
+    ),
+  );
   const midLengths = mid.map((m) => m.length);
   const minLen = Math.min(...midLengths);
   const maxLen = Math.max(...midLengths);
-  const midPattern = minLen === maxLen ? `.{${minLen}}` : `.{${minLen},${maxLen}}`;
+  const midPattern =
+    minLen === maxLen ? `.{${minLen}}` : `.{${minLen},${maxLen}}`;
 
-  const parts = [prefix.length > 0 ? escapeRegex(prefix) : "", midPattern, suffix.length > 0 ? escapeRegex(suffix) : ""].filter(Boolean);
+  const parts = [
+    prefix.length > 0 ? escapeRegex(prefix) : "",
+    midPattern,
+    suffix.length > 0 ? escapeRegex(suffix) : "",
+  ].filter(Boolean);
 
   const regexStr = `\\b${parts.join("")}\\b`;
 
@@ -183,10 +206,19 @@ function fallbackPrefixSuffix(examples: string[]): GenerateResult {
       missCount,
     };
     if (prefix.length === 0 && suffix.length === 0) {
-      result.warning = "Estrutura inconsistente — o padrão pode ser muito amplo. Considere criar regras separadas.";
+      result.warning =
+        "Estrutura inconsistente — o padrão pode ser muito amplo. Considere criar regras separadas.";
     }
     return result;
   } catch {
-    return { regex: ".+", explanation: "Padrão genérico (fallback)", confidence: "low", matchCount: examples.length, missCount: 0, warning: "Não foi possível gerar um padrão específico para esses exemplos." };
+    return {
+      regex: ".+",
+      explanation: "Padrão genérico (fallback)",
+      confidence: "low",
+      matchCount: examples.length,
+      missCount: 0,
+      warning:
+        "Não foi possível gerar um padrão específico para esses exemplos.",
+    };
   }
 }

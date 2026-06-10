@@ -1,6 +1,6 @@
 import { entropy, redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // Context-anchored generic secrets: key=value, key: value patterns.
 // The context anchor (api_key, secret, token...) keeps false-positive rate low.
@@ -31,7 +31,16 @@ export const genericSecretDetector: Detector = {
     for (const m of text.matchAll(GENERIC_RE)) {
       const raw = m[1];
       if (!raw || entropy(raw) < 3.5) continue;
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + m[0].length, 0.7));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + m[0].length,
+          0.7,
+        ),
+      );
     }
     return findings;
   },
@@ -47,7 +56,16 @@ export const envAssignmentDetector: Detector = {
     for (const m of text.matchAll(ENV_RE)) {
       const raw = m[2];
       if (!raw || entropy(raw) < 3.0) continue;
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + m[0].length, 0.75));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + m[0].length,
+          0.75,
+        ),
+      );
     }
     return findings;
   },
@@ -62,7 +80,16 @@ export const npmTokenDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(NPM_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.95));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.95,
+        ),
+      );
     }
     return findings;
   },
@@ -77,7 +104,16 @@ export const sendgridKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SENDGRID_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },
@@ -92,7 +128,9 @@ export const mailgunKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(MAILGUN_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9));
+      findings.push(
+        makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9),
+      );
     }
     return findings;
   },
@@ -107,7 +145,9 @@ export const mailchimpKeyDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(MAILCHIMP_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9));
+      findings.push(
+        makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9),
+      );
     }
     return findings;
   },
@@ -122,7 +162,16 @@ export const twilioSidDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(TWILIO_SID_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.85));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.85,
+        ),
+      );
     }
     return findings;
   },
@@ -137,7 +186,16 @@ export const discordWebhookDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(DISCORD_WEBHOOK_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },
@@ -152,7 +210,9 @@ export const telegramBotTokenDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(TELEGRAM_BOT_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9));
+      findings.push(
+        makeFinding(this, raw, redact(raw), m.index, m.index + raw.length, 0.9),
+      );
     }
     return findings;
   },

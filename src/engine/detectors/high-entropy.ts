@@ -1,6 +1,6 @@
 import { entropy, redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // Matches standalone hex strings of 40+ chars (word boundaries required).
 // 40 chars = SHA-1 / git hash minimum; 64 chars = SHA-256 / common API token length.
@@ -8,7 +8,8 @@ const HEX_RE = /\b([0-9a-f]{40,})\b/gi;
 
 // Words that, when appearing just before the hex string, indicate it's a
 // legitimate hash/checksum — not a secret that was accidentally pasted.
-const HASH_CONTEXT_RE = /(?:sha(?:256|512|1|2|3)?|md5|hash|checksum|digest|fingerprint|commit|tree|blob)\s*:?\s*$/i;
+const HASH_CONTEXT_RE =
+  /(?:sha(?:256|512|1|2|3)?|md5|hash|checksum|digest|fingerprint|commit|tree|blob)\s*:?\s*$/i;
 
 // Service-prefixed API keys that embed the key directly in the name with `_`
 // separator (no `=` or `:` between prefix and value).
@@ -61,7 +62,14 @@ export const n8nApiKeyDetector: Detector = {
     for (const m of text.matchAll(N8N_RE)) {
       const raw = m[0];
       findings.push(
-        makeFinding(this, raw, redact(raw), m.index ?? 0, (m.index ?? 0) + raw.length, 0.95),
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index ?? 0,
+          (m.index ?? 0) + raw.length,
+          0.95,
+        ),
       );
     }
     return findings;
@@ -80,7 +88,14 @@ export const embeddedKeyDetector: Detector = {
       const value = m[1];
       if (!value || entropy(value) < 3.5) continue;
       findings.push(
-        makeFinding(this, raw, redact(raw), m.index ?? 0, (m.index ?? 0) + raw.length, 0.80),
+        makeFinding(
+          this,
+          raw,
+          redact(raw),
+          m.index ?? 0,
+          (m.index ?? 0) + raw.length,
+          0.8,
+        ),
       );
     }
     return findings;

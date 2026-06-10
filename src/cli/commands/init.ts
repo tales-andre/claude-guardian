@@ -1,11 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
-import { getDb } from "../../db/client.ts";
-import { DEFAULT_CONFIG, DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_PATH, expandHome } from "../../config/defaults.ts";
+import { DEFAULT_CONFIG_PATH, expandHome } from "../../config/defaults.ts";
 import { loadConfig } from "../../config/loader.ts";
+import { getDb } from "../../db/client.ts";
 
 interface InitOptions {
   config?: string;
@@ -44,7 +44,10 @@ export async function cmdInit(opts: InitOptions): Promise<void> {
   let settings: Record<string, unknown> = {};
   if (existsSync(settingsPath)) {
     try {
-      settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
+      settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<
+        string,
+        unknown
+      >;
     } catch {
       settings = {};
     }
@@ -57,22 +60,28 @@ export async function cmdInit(opts: InitOptions): Promise<void> {
 
   const hooks = (settings["hooks"] as Record<string, unknown[]>) ?? {};
 
-  const preToolEntry = { matcher: ".*", hooks: [{ type: "command", command: preToolHook }] };
+  const preToolEntry = {
+    matcher: ".*",
+    hooks: [{ type: "command", command: preToolHook }],
+  };
   const promptEntry = { hooks: [{ type: "command", command: promptHook }] };
-  const postToolEntry = { matcher: ".*", hooks: [{ type: "command", command: postToolHook }] };
+  const postToolEntry = {
+    matcher: ".*",
+    hooks: [{ type: "command", command: postToolHook }],
+  };
 
-  hooks["PreToolUse"] = dedupeHooks(
-    [...((hooks["PreToolUse"] as unknown[]) ?? []), preToolEntry],
-    preToolHook,
-  );
-  hooks["UserPromptSubmit"] = dedupeHooks(
-    [...((hooks["UserPromptSubmit"] as unknown[]) ?? []), promptEntry],
-    promptHook,
-  );
-  hooks["PostToolUse"] = dedupeHooks(
-    [...((hooks["PostToolUse"] as unknown[]) ?? []), postToolEntry],
-    postToolHook,
-  );
+  hooks["PreToolUse"] = dedupeHooks([
+    ...((hooks["PreToolUse"] as unknown[]) ?? []),
+    preToolEntry,
+  ]);
+  hooks["UserPromptSubmit"] = dedupeHooks([
+    ...((hooks["UserPromptSubmit"] as unknown[]) ?? []),
+    promptEntry,
+  ]);
+  hooks["PostToolUse"] = dedupeHooks([
+    ...((hooks["PostToolUse"] as unknown[]) ?? []),
+    postToolEntry,
+  ]);
 
   settings["hooks"] = hooks;
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
@@ -83,7 +92,9 @@ export async function cmdInit(opts: InitOptions): Promise<void> {
   console.log("claude-guardian is ready.");
   console.log("");
   console.log("  Start the dashboard:  claude-guardian serve");
-  console.log(`  Dashboard URL:        http://localhost:${config.dashboardPort}/dashboard`);
+  console.log(
+    `  Dashboard URL:        http://localhost:${config.dashboardPort}/dashboard`,
+  );
 
   if (opts.showToken || !config.dashboardToken) {
     console.log(`  Dashboard token:      ${config.dashboardToken}`);
@@ -96,7 +107,7 @@ export async function cmdInit(opts: InitOptions): Promise<void> {
 
 type HookEntry = { hooks?: Array<{ type: string; command?: string }> };
 
-function dedupeHooks(entries: unknown[], newCommand: string): unknown[] {
+function dedupeHooks(entries: unknown[]): unknown[] {
   const seen = new Set<string>();
   const result: unknown[] = [];
   for (const entry of entries) {

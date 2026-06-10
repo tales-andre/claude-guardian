@@ -65,7 +65,13 @@ process.stdin.on("end", () => {
   if (action === "allow") process.exit(0);
 
   try {
-    const incident = recordIncident(db, `${tool}:response`, sessionId, findings, "block");
+    const incident = recordIncident(
+      db,
+      `${tool}:response`,
+      sessionId,
+      findings,
+      "block",
+    );
     appendAuditEntry(db, "post-tool-response-audit", {
       incidentId: incident.id,
       tool,

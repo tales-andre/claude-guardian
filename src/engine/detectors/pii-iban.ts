@@ -1,6 +1,6 @@
 import { validIban } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // IBAN: 2-letter country code + 2 check digits + up to 30 alphanumeric chars.
 // Spaces every 4 chars are optional (print format).
@@ -18,7 +18,9 @@ export const ibanDetector: Detector = {
       if (!validIban(raw)) continue;
       const clean = raw.replace(/\s/g, "");
       const snippet = `${clean.slice(0, 4)}****${clean.slice(-4)}`;
-      findings.push(makeFinding(this, raw, snippet, m.index, m.index + raw.length, 0.95));
+      findings.push(
+        makeFinding(this, raw, snippet, m.index, m.index + raw.length, 0.95),
+      );
     }
     return findings;
   },

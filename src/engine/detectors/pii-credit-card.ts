@@ -1,6 +1,6 @@
 import { luhn, redact } from "../utils.ts";
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // Credit card patterns with optional separators.
 // Visa (16d), Mastercard (16d), Amex (15d), Discover (16d).
@@ -18,7 +18,16 @@ export const creditCardDetector: Detector = {
     for (const m of text.matchAll(CC_RE)) {
       const raw = m[0];
       if (!luhn(raw)) continue;
-      findings.push(makeFinding(this, raw, redact(raw.replace(/[\s-]/g, "")), m.index, m.index + raw.length, 0.97));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          redact(raw.replace(/[\s-]/g, "")),
+          m.index,
+          m.index + raw.length,
+          0.97,
+        ),
+      );
     }
     return findings;
   },

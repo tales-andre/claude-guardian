@@ -1,5 +1,5 @@
-import { makeFinding } from "./types.ts";
 import type { Detector, DetectorFinding } from "./types.ts";
+import { makeFinding } from "./types.ts";
 
 // RFC-1918 private IPv4 ranges only — public IPs are not PII.
 const PRIVATE_IP_RE =
@@ -14,7 +14,16 @@ export const privateIpDetector: Detector = {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PRIVATE_IP_RE)) {
       const raw = m[0];
-      findings.push(makeFinding(this, raw, "*.*.*.* (private IP)", m.index, m.index + raw.length, 0.8));
+      findings.push(
+        makeFinding(
+          this,
+          raw,
+          "*.*.*.* (private IP)",
+          m.index,
+          m.index + raw.length,
+          0.8,
+        ),
+      );
     }
     return findings;
   },
