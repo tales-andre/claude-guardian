@@ -17,6 +17,11 @@ import { getDb } from "../db/client.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
 import { scanSync } from "../engine/index.ts";
 import {
+  detectHost,
+  type NormalizedHookInput,
+  normalizeHookInput,
+} from "../hosts/index.ts";
+import {
   buildScope,
   createApproval,
   findActiveApproval,
@@ -27,6 +32,7 @@ import {
   fetchActiveCentralApproval,
   reportToCentral,
 } from "../lib/central.ts";
+import { reportEvasion } from "../lib/evasion.ts";
 import {
   buildApprovalBlockReason,
   buildBlockReason,
@@ -41,18 +47,6 @@ import type { DataType, DetectorFinding } from "../types/index.ts";
 // Exit 0: allow  |  Exit 2: block
 
 const MAX_FILE_BYTES = 1_048_576; // 1 MB
-
-interface HookInput {
-  session_id?: string;
-  transcript_path?: string;
-  tool_name?: string;
-  tool_input?: {
-    file_path?: string;
-    command?: string;
-    content?: string;
-    new_string?: string;
-  };
-}
 
 function blockAndExit(reason: string): never {
   process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
@@ -169,13 +163,16 @@ process.stdin.on("end", () => {
 
 async function main(): Promise<never> {
   const config = loadConfig();
-  let data: HookInput;
+  let data: NormalizedHookInput;
 
   try {
-    data = JSON.parse(raw) as HookInput;
+    data = JSON.parse(raw) as NormalizedHookInput;
   } catch {
     allowAndExit();
   }
+
+  // Normaliza o payload do host (Claude/Kiro) — para Claude é no-op.
+  data = normalizeHookInput(data, detectHost());
 
   const tool = data.tool_name ?? "";
   const input = data.tool_input ?? {};
@@ -184,6 +181,9 @@ async function main(): Promise<never> {
   if (checkAllowTag(data.transcript_path)) allowAndExit();
 
   const db = getDb(config.dbPath);
+  // Evasão por troca de provider desliga a managed settings inteira — registra
+  // como alerta visível (não bloqueia o fluxo do dev).
+  reportEvasion(db, config);
   const customDetectors = loadCustomDetectors(db);
   const dashUrl = dashboardBaseUrl(config);
 
