@@ -7,6 +7,7 @@ if (existsSync(join(process.cwd(), ".guardian-bypass"))) process.exit(0);
 
 import { loadConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
+import { ASYNC_DETECTORS } from "../engine/detectors/async.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
 import { scanSync } from "../engine/index.ts";
 import { appendAuditEntry } from "../lib/audit.ts";
@@ -54,10 +55,12 @@ process.stdin.on("end", () => {
   const db = getDb(config.dbPath);
   const customDetectors = loadCustomDetectors(db);
 
+  // Caminho assíncrono (audit-only): inclui os detectores pesados/tiered que
+  // não cabem no orçamento síncrono do PreToolUse.
   const { findings, timedOut } = scanSync(content, {
     timeoutMs: config.engineTimeoutMs,
     allowlist: config.allowlist,
-    extraDetectors: customDetectors,
+    extraDetectors: [...customDetectors, ...ASYNC_DETECTORS],
   });
 
   if (timedOut || findings.length === 0) process.exit(0);
