@@ -115,8 +115,16 @@ bash enterprise/install-agent.sh \
   --key <GUARDIAN_AGENT_KEY>
 ```
 
-O script registra os hooks no Claude Code e grava `centralUrl`/`centralApiKey`
-na config (`~/.config/claude-guardian/config.json`). Reinicie o Claude Code.
+O script registra os hooks no Claude Code, grava `centralUrl`/`centralApiKey`
+na config (`~/.config/claude-guardian/config.json`) e instala o **daemon local
+como serviço** (passo 5). Reinicie o Claude Code.
+
+No Windows, use o equivalente PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File enterprise\install-agent.ps1 `
+  -Server https://guardian.minhaempresa.com -Key <GUARDIAN_AGENT_KEY>
+```
 
 Equivalente manual:
 
@@ -126,6 +134,37 @@ node --experimental-strip-types src/cli/index.ts init \
   --central-url https://guardian.minhaempresa.com \
   --central-key <GUARDIAN_AGENT_KEY>
 ```
+
+### 2.1 Daemon local como serviço
+
+A extensão de navegador (`extension/`) é **fail-closed**: se o daemon local não
+responder em `http://127.0.0.1:7734`, o envio nos sites de IA é bloqueado. Por
+isso o daemon precisa sobreviver a reboot/logon — o instalador cuida disso:
+
+| Plataforma | Mecanismo | Instalado por |
+|---|---|---|
+| Linux (com systemd) | unit `claude-guardian.service` (`Restart=always`) | `install-agent.sh` |
+| macOS | LaunchAgent `com.claude-guardian.daemon` (`KeepAlive`) | `install-agent.sh` |
+| Windows | tarefa agendada `ClaudeGuardianDaemon` no logon | `install-agent.ps1` |
+
+Os templates ficam em `enterprise/service/`. Use `--no-service` / `-NoService`
+para pular (ex.: máquina que só usa hooks de CLI e não navega).
+
+### 2.2 WSL
+
+Cenário recomendado: **daemon no Windows** (via `install-agent.ps1`) servindo
+os dois lados —
+
+- a extensão dos browsers do Windows fala com `http://127.0.0.1:7734`;
+- os hooks dentro da distro WSL2 alcançam o mesmo daemon via
+  `http://localhost:7734` (encaminhamento de localhost do WSL2).
+
+Se a distro tem systemd habilitado (`systemd=true` no `wsl.conf`), o
+`install-agent.sh` também consegue instalar o serviço dentro do WSL; nesse caso
+o daemon atende só os hooks da distro — browsers do Windows continuam
+precisando do daemon Windows. **Valide o encaminhamento de localhost no piloto**
+(há configurações de rede WSL, como `networkingMode=mirrored`, que mudam o
+comportamento).
 
 ## 3. Fluxo de exceção no modo enterprise
 
