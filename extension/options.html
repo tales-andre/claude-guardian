@@ -11,12 +11,16 @@
   input { width: 100%; padding: .6rem .7rem; border: 1px solid #d0d0d0; border-radius: 6px; font-size: .95rem; }
   button { margin-top: 1.25rem; background: #4f46e5; color: #fff; border: none; border-radius: 6px; padding: .65rem 1.2rem; font-weight: 600; cursor: pointer; }
   .ok { color: #065f46; margin-top: .75rem; display: none; }
+  .managed { display: none; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; padding: .6rem .8rem; font-size: .85rem; color: #3730a3; }
+  input:disabled { background: #f3f4f6; color: #6b7280; }
+  button:disabled { background: #a5b4fc; cursor: not-allowed; }
   small { color: #666; }
 </style>
 </head>
 <body>
   <h1>🛡️ Claude Guardian</h1>
   <p><small>Aponta a extensão para o backend <code>claude-guardian</code> rodando localmente.</small></p>
+  <p class="managed" id="managed">🔒 Esta configuração é gerenciada pela sua organização e não pode ser alterada aqui.</p>
   <label for="endpoint">Endpoint do guardian</label>
   <input id="endpoint" placeholder="http://127.0.0.1:7734" />
   <label for="token">Token (dashboardToken)</label>

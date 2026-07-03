@@ -6,15 +6,32 @@ const api = globalThis.browser ?? globalThis.chrome;
 
 const DEFAULTS = { endpoint: "http://127.0.0.1:7734", token: "" };
 
+// Managed storage (política da organização via MDM) tem precedência sobre o
+// que o usuário salvou na options page. storage.managed lança/retorna vazio
+// quando não há política — nesse caso vale storage.local (modo standalone).
+async function getManaged() {
+  try {
+    return (await api.storage.managed.get(["endpoint", "token"])) || {};
+  } catch {
+    return {};
+  }
+}
+
 async function getSettings() {
+  const managed = await getManaged();
   try {
     const stored = await api.storage.local.get(["endpoint", "token"]);
     return {
-      endpoint: stored.endpoint || DEFAULTS.endpoint,
-      token: stored.token ?? DEFAULTS.token,
+      endpoint: managed.endpoint || stored.endpoint || DEFAULTS.endpoint,
+      token: managed.endpoint
+        ? (managed.token ?? "")
+        : (stored.token ?? DEFAULTS.token),
     };
   } catch {
-    return DEFAULTS;
+    return {
+      endpoint: managed.endpoint || DEFAULTS.endpoint,
+      token: managed.token ?? DEFAULTS.token,
+    };
   }
 }
 

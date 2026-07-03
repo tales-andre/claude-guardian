@@ -47,6 +47,27 @@ mesmo token na extensão (página de opções).
 3. **Carregar extensão temporária** → selecione `extension/manifest.json`.
 4. ⚠️ No Firefox a extensão temporária **some ao fechar o browser** — recarregue.
 
+## Modo gerenciado (frota / MDM)
+
+Em máquinas corporativas a extensão é instalada e configurada por política — o
+usuário não escolhe nem consegue alterar:
+
+- **Instalação forçada**: `ExtensionInstallForcelist` (Chrome/Edge) ou
+  `ExtensionSettings` com `installation_mode: force_installed` (Firefox),
+  distribuídos pelo MDM. Artefatos prontos por canal são gerados pelo
+  control-plane: `claude-guardian emit-managed-settings`.
+- **Configuração**: `endpoint` e `token` vêm de `chrome.storage.managed`
+  (schema em `managed-schema.json`). Quando a política existe, ela tem
+  precedência sobre a options page, que passa a exibir os valores como
+  somente-leitura.
+- **Sem política** (modo standalone/dev): comportamento atual — options page
+  editável, valores em `storage.local`.
+
+> Modelo de ameaça honesto: um usuário com admin local pode, em último caso,
+> remover o browser gerenciado ou usar outro binário. A extensão torna a
+> proteção **resistente e visível** (o fleet acusa extensão ausente), não
+> impossível de contornar.
+
 ## Como funciona
 
 - **Camada de rede (`injected.js`)**: intercepta `fetch` **e `XMLHttpRequest`**

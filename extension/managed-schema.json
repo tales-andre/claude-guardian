@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "Base URL of the local claude-guardian daemon (e.g. http://127.0.0.1:7734). When set by policy, users cannot override it."
+    },
+    "token": {
+      "type": "string",
+      "description": "dashboardToken used to authenticate against the local daemon."
+    }
+  }
+}

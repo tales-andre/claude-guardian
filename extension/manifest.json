@@ -54,5 +54,8 @@
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
+  },
+  "storage": {
+    "managed_schema": "managed-schema.json"
   }
 }
