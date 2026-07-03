@@ -99,7 +99,7 @@ enviam a chave em header.
 | `DATABASE_URL` / `GUARDIAN_DATABASE_URL` | Postgres; vazio = SQLite local |
 | `GUARDIAN_DASHBOARD_TOKEN` | Token do admin no dashboard |
 | `GUARDIAN_AGENT_KEY` | Chave compartilhada dos agentes (sem ela, ingestão desabilitada — fail-closed) |
-| `GUARDIAN_HOST` | Bind address (`0.0.0.0` em container) |
+| `GUARDIAN_BIND_HOST` | Bind address (`0.0.0.0` em container) |
 | `GUARDIAN_PORT` | Porta (padrão 7734) |
 | `GUARDIAN_DB_PATH` | Caminho do SQLite (só sem `DATABASE_URL`) |
 

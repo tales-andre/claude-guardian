@@ -35,7 +35,7 @@ spec:
               containerPort: 7734
               protocol: TCP
           env:
-            - name: GUARDIAN_HOST
+            - name: GUARDIAN_BIND_HOST
               value: "0.0.0.0"
             {{- if or .Values.database.existingSecret .Values.database.url }}
             - name: DATABASE_URL

@@ -19,7 +19,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 FROM node:22-bookworm-slim
 
 ENV NODE_ENV=production \
-    GUARDIAN_HOST=0.0.0.0 \
+    GUARDIAN_BIND_HOST=0.0.0.0 \
     GUARDIAN_PORT=7734 \
     GUARDIAN_DB_PATH=/data/guardian.db
 

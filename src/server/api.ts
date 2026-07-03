@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import Fastify from "fastify";
 import { saveConfig } from "../config/loader.ts";
+import { getDb } from "../db/client.ts";
 import { buildScope } from "../lib/approval.ts";
 import { generateRegex } from "../lib/regex-generator.ts";
+import { scanWeb, type WebScanRequest } from "../lib/web-scan.ts";
 import type {
   AgentIngestPayload,
   ApprovalStatus,
@@ -506,6 +508,35 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
       void reply.status(204).send();
     },
   );
+
+  // ── Scan da extensão de navegador ─────────────────────────────────────────
+  // Registrada apenas no modo local (daemon SQLite): o texto do prompt nunca
+  // chega ao servidor central — o scan roda na máquina e só metadados são
+  // espelhados via outbox (dentro do scanWeb).
+  if (store.kind === "sqlite") {
+    fastify.post(
+      "/api/scan-web",
+      (req: FastifyRequest<{ Body: WebScanRequest }>, reply) => {
+        const body = req.body ?? ({} as WebScanRequest);
+        if (typeof body.text !== "string" && !Array.isArray(body.files)) {
+          return void reply
+            .status(400)
+            .send({ error: "text (string) or files (array) required" });
+        }
+        try {
+          void reply.send(scanWeb(getDb(config.dbPath), config, body));
+        } catch {
+          // Fail-closed: qualquer erro inesperado do servidor bloqueia o envio.
+          void reply.send({
+            action: "block",
+            findings: [],
+            reason:
+              "Erro interno no guardian — bloqueado por segurança (fail-closed).",
+          });
+        }
+      },
+    );
+  }
 
   // ── Metrics ────────────────────────────────────────────────────────────────
   fastify.get("/api/metrics", async (_req, reply) => {

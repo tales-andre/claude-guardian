@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "Claude Guardian — DLP for AI chat",
+  "version": "0.2.0",
+  "description": "Escaneia prompts e uploads em claude.ai, ChatGPT, Gemini, Copilot, Mistral e Adapta One contra o backend local do claude-guardian. Fail-closed.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://copilot.microsoft.com/*",
+    "https://chat.mistral.ai/*",
+    "https://adapta.one/*",
+    "https://app.adapta.one/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://copilot.microsoft.com/*",
+        "https://chat.mistral.ai/*",
+        "https://adapta.one/*",
+        "https://app.adapta.one/*"
+      ],
+      "js": ["config.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js", "config.js"],
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://copilot.microsoft.com/*",
+        "https://chat.mistral.ai/*",
+        "https://adapta.one/*",
+        "https://app.adapta.one/*"
+      ]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "claude-guardian@junto.local"
+    }
+  }
+}
