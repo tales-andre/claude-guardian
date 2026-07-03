@@ -63,3 +63,10 @@ temp/
 *.tmp
 *.bak
 *.orig
+
+# Artefatos gerados pelo emit-managed-settings
+managed-settings-out/
+
+# Snapshot lateral do projeto (linhagem portada na Fase 1)
+claude-guardian.zip
+*Zone.Identifier

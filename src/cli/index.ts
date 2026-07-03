@@ -3,6 +3,7 @@
 import { Command } from "commander";
 import { cmdApprove, cmdDeny } from "./commands/approve.ts";
 import { cmdInit } from "./commands/init.ts";
+import { cmdEmitManagedSettings } from "./commands/managed-settings.ts";
 import { cmdPolicy } from "./commands/policy.ts";
 import { cmdScan } from "./commands/scan.ts";
 import { cmdServe } from "./commands/serve.ts";
@@ -42,6 +43,21 @@ program
   )
   .option("--config <path>", "Config file path")
   .action(cmdServe);
+
+program
+  .command("emit-managed-settings")
+  .description(
+    "Compile org-wide managed settings artifacts (server payload + MDM files)",
+  )
+  .option("--out <dir>", "Output directory (default: ./managed-settings-out)")
+  .option(
+    "--hook-command <cmd>",
+    "Command that runs the guardian PreToolUse hook",
+  )
+  .option("--allow-mcp <list>", "Comma-separated allowed MCP servers")
+  .option("--deny-mcp <list>", "Comma-separated denied MCP servers")
+  .option("--deny-read <list>", "Comma-separated paths to deny reading")
+  .action(cmdEmitManagedSettings);
 
 program
   .command("scan <target>")
