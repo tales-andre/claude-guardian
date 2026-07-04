@@ -5,7 +5,7 @@
 // host para o formato que os hooks já esperam (formato Claude), deixando o
 // engine/policy/audit totalmente agnósticos.
 
-export type Host = "claude" | "kiro";
+export type Host = "claude" | "kiro" | "claude-desktop" | "kiro-ide";
 
 // Nomes canônicos do Kiro (e aliases) → nomes de tool do guardian.
 const TOOL_NAME_MAP: Record<string, string> = {
@@ -28,7 +28,14 @@ export function normalizeToolName(name: string): string {
 /** Descobre qual ferramenta está invocando o hook. */
 export function detectHost(env: NodeJS.ProcessEnv = process.env): Host {
   const explicit = env["GUARDIAN_HOST"]?.toLowerCase();
-  if (explicit === "kiro" || explicit === "claude") return explicit;
+  if (
+    explicit === "kiro" ||
+    explicit === "claude" ||
+    explicit === "claude-desktop" ||
+    explicit === "kiro-ide"
+  ) {
+    return explicit;
+  }
   if (Object.keys(env).some((k) => k.startsWith("KIRO"))) return "kiro";
   return "claude";
 }

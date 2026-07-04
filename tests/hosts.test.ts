@@ -77,3 +77,14 @@ describe("normalizeHookInput", () => {
     expect(out.session_id).toBe("s1");
   });
 });
+
+describe("detectHost — superfícies GUI", () => {
+  it("detecta claude-desktop via GUARDIAN_HOST explícito", () => {
+    expect(detectHost({ GUARDIAN_HOST: "claude-desktop" })).toBe(
+      "claude-desktop",
+    );
+  });
+  it("detecta kiro-ide via GUARDIAN_HOST explícito", () => {
+    expect(detectHost({ GUARDIAN_HOST: "kiro-ide" })).toBe("kiro-ide");
+  });
+});

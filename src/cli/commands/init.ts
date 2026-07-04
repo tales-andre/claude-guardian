@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_CONFIG_PATH, expandHome } from "../../config/defaults.ts";
 import { loadConfig } from "../../config/loader.ts";
 import { getDb } from "../../db/client.ts";
+import { installMcpProxy } from "../../lib/mcp-install.ts";
 
 interface InitOptions {
   config?: string;
@@ -104,6 +105,20 @@ export async function cmdInit(opts: InitOptions): Promise<void> {
   settings["hooks"] = hooks;
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
   console.log(`✓ Hooks registered in ${settingsPath}`);
+
+  // 4b. Proxy MCP: envolve as configs do Claude Desktop / Kiro IDE (GUI Gateway
+  // Fase 1). Sem CA, sem daemon — o shim escaneia in-process como os hooks.
+  const proxyPath = join(packageRoot, "src/proxy/mcp-proxy.ts");
+  const wrappedConfigs = installMcpProxy(proxyPath);
+  if (wrappedConfigs.length > 0) {
+    for (const f of wrappedConfigs)
+      console.log(`✓ MCP proxy instalado em ${f}`);
+    console.log(
+      "Reinicie o Claude Desktop / Kiro IDE para ativar o proxy MCP.",
+    );
+  } else {
+    console.log("• Nenhuma config MCP encontrada (Claude Desktop / Kiro IDE).");
+  }
 
   // 5. Summary.
   console.log("");
