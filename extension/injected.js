@@ -240,6 +240,11 @@
     }
     if (!text) {
       // Recognized as a send but no text extracted → format changed/unknown.
+      // Reporta o drift (via content → background → daemon → fleet) e bloqueia.
+      window.postMessage(
+        { __guardian: "extract-fail", nonce: NONCE, host: location.hostname },
+        "*",
+      );
       return { block: true };
     }
     const verdict = await requestScan({ text, context: { url: location.href, tabTitle: document.title } });

@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS custom_detectors (
 );
 
 CREATE INDEX IF NOT EXISTS idx_custom_detectors_created ON custom_detectors(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS machines (
+  hostname            TEXT PRIMARY KEY,
+  username            TEXT NOT NULL DEFAULT '',
+  guardian_version    TEXT NOT NULL DEFAULT '',
+  config_hash         TEXT NOT NULL DEFAULT '',
+  extension_version   TEXT NOT NULL DEFAULT '',
+  extension_last_seen TEXT NOT NULL DEFAULT '',
+  extract_failures    TEXT NOT NULL DEFAULT '{}',
+  last_seen           TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_machines_last_seen ON machines(last_seen DESC);
 `;
 
 export function applySchema(db: BetterSqlite3.Database): void {

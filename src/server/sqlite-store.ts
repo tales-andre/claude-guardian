@@ -17,6 +17,8 @@ import type {
   ApprovalStatus,
   AuditEntry,
   Incident,
+  MachineHeartbeatPayload,
+  MachineRow,
 } from "../types/index.ts";
 import type {
   AuditVerifyResult,
@@ -272,4 +274,67 @@ export class SqliteStore implements GuardianStore {
 
     return Promise.resolve({ incidentId: incident.id });
   }
+
+  // ── Fleet ───────────────────────────────────────────────────────────────────
+  upsertMachine(payload: MachineHeartbeatPayload): Promise<void> {
+    const now = new Date().toISOString();
+    const ext = payload.extension ?? null;
+    this.db
+      .prepare(
+        `INSERT INTO machines(hostname, username, guardian_version, config_hash,
+                              extension_version, extension_last_seen, extract_failures, last_seen)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(hostname) DO UPDATE SET
+           username            = excluded.username,
+           guardian_version    = excluded.guardian_version,
+           config_hash         = excluded.config_hash,
+           extension_version   = CASE WHEN excluded.extension_version != ''
+                                      THEN excluded.extension_version
+                                      ELSE machines.extension_version END,
+           extension_last_seen = CASE WHEN excluded.extension_last_seen != ''
+                                      THEN excluded.extension_last_seen
+                                      ELSE machines.extension_last_seen END,
+           extract_failures    = CASE WHEN excluded.extension_version != ''
+                                      THEN excluded.extract_failures
+                                      ELSE machines.extract_failures END,
+           last_seen           = excluded.last_seen`,
+      )
+      .run(
+        payload.machine.hostname,
+        payload.machine.username,
+        payload.guardianVersion,
+        payload.configHash,
+        ext?.version ?? "",
+        ext ? now : "",
+        JSON.stringify(ext?.extractFailures ?? {}),
+        now,
+      );
+    return Promise.resolve();
+  }
+
+  listMachines(): Promise<MachineRow[]> {
+    const rows = this.db
+      .prepare("SELECT * FROM machines ORDER BY last_seen DESC")
+      .all() as Record<string, unknown>[];
+    return Promise.resolve(rows.map(rowToMachine));
+  }
+}
+
+function rowToMachine(row: Record<string, unknown>): MachineRow {
+  let extractFailures: Record<string, number> = {};
+  try {
+    extractFailures = JSON.parse(String(row["extract_failures"] ?? "{}"));
+  } catch {
+    // linha corrompida não pode derrubar a listagem da frota
+  }
+  return {
+    hostname: String(row["hostname"]),
+    username: String(row["username"] ?? ""),
+    guardianVersion: String(row["guardian_version"] ?? ""),
+    configHash: String(row["config_hash"] ?? ""),
+    extensionVersion: String(row["extension_version"] ?? ""),
+    extensionLastSeen: String(row["extension_last_seen"] ?? ""),
+    extractFailures,
+    lastSeen: String(row["last_seen"]),
+  };
 }

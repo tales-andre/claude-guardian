@@ -6,12 +6,19 @@ import Fastify from "fastify";
 import { saveConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
 import { buildScope } from "../lib/approval.ts";
+import { computeMachineStatus } from "../lib/fleet.ts";
+import {
+  buildMachineHeartbeat,
+  sendMachineHeartbeat,
+} from "../lib/fleet-client.ts";
 import { generateRegex } from "../lib/regex-generator.ts";
 import { scanWeb, type WebScanRequest } from "../lib/web-scan.ts";
 import type {
   AgentIngestPayload,
   ApprovalStatus,
   Config,
+  ExtensionHeartbeat,
+  MachineHeartbeatPayload,
   PolicyAction,
   PolicyRule,
 } from "../types/index.ts";
@@ -370,6 +377,77 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
     },
   );
 
+  // ── Fleet: heartbeat das máquinas (modo central) ───────────────────────────
+  fastify.post(
+    "/api/agent/heartbeat",
+    async (req: FastifyRequest<{ Body: MachineHeartbeatPayload }>, reply) => {
+      const body = req.body ?? ({} as MachineHeartbeatPayload);
+      if (!body.machine?.hostname) {
+        return void reply.status(400).send({ error: "hostname required" });
+      }
+      await store.upsertMachine({
+        machine: {
+          hostname: String(body.machine.hostname),
+          username: String(body.machine.username ?? ""),
+        },
+        guardianVersion: String(body.guardianVersion ?? ""),
+        configHash: String(body.configHash ?? ""),
+        extension: body.extension
+          ? {
+              version: String(body.extension.version ?? ""),
+              extractFailures: body.extension.extractFailures ?? {},
+            }
+          : null,
+      });
+      void reply.status(204).send();
+    },
+  );
+
+  // Visão da frota para o admin: status calculado por máquina.
+  fastify.get(
+    "/api/fleet",
+    async (
+      req: FastifyRequest<{
+        Querystring: {
+          expectedHash?: string;
+          extensionRequired?: string;
+          staleAfterMs?: string;
+        };
+      }>,
+      reply,
+    ) => {
+      const q = req.query ?? {};
+      const extensionRequired =
+        q.extensionRequired === "1" || q.extensionRequired === "true";
+      const staleAfterMs = q.staleAfterMs
+        ? parseInt(q.staleAfterMs, 10)
+        : undefined;
+      const machines = await store.listMachines();
+      void reply.send(
+        machines.map((m) => ({
+          ...m,
+          status: computeMachineStatus(
+            {
+              configHash: m.configHash,
+              lastSeen: m.lastSeen,
+              ...(m.extensionLastSeen && {
+                extensionLastSeen: m.extensionLastSeen,
+              }),
+            },
+            {
+              // Sem hash esperado informado, compara consigo mesmo (o sinal
+              // de tamper por hash fica desativado; stale/extensão continuam).
+              expectedConfigHash: q.expectedHash ?? m.configHash,
+              extensionRequired,
+              ...(staleAfterMs !== undefined &&
+                Number.isFinite(staleAfterMs) && { staleAfterMs }),
+            },
+          ),
+        })),
+      );
+    },
+  );
+
   // ── Policies ───────────────────────────────────────────────────────────────
   fastify.get("/api/policies", (_req, reply) => {
     void reply.send(config.policies);
@@ -536,6 +614,48 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
         }
       },
     );
+
+    // ── Heartbeat da extensão de navegador ────────────────────────────────────
+    // A extensão pinga o daemon local; o daemon acumula e repassa ao central
+    // no heartbeat de máquina. Extensão que para de pingar com a máquina viva
+    // aparece como "tampered" no fleet (extensão removida/desabilitada).
+    let extensionState: ExtensionHeartbeat | null = null;
+
+    fastify.post(
+      "/api/extension/heartbeat",
+      (req: FastifyRequest<{ Body: ExtensionHeartbeat }>, reply) => {
+        const body = req.body ?? ({} as ExtensionHeartbeat);
+        if (typeof body.version !== "string" || body.version === "") {
+          return void reply.status(400).send({ error: "version required" });
+        }
+        const merged: Record<string, number> = {
+          ...(extensionState?.extractFailures ?? {}),
+        };
+        for (const [host, n] of Object.entries(body.extractFailures ?? {})) {
+          if (Number.isFinite(n)) merged[host] = (merged[host] ?? 0) + n;
+        }
+        extensionState = { version: body.version, extractFailures: merged };
+        // Fire-and-forget: o ping da extensão nunca espera o central.
+        void sendMachineHeartbeat(
+          config,
+          buildMachineHeartbeat(extensionState),
+        );
+        void reply.status(204).send();
+      },
+    );
+
+    // Heartbeat periódico da máquina (com ou sem extensão): mantém a máquina
+    // visível no fleet mesmo quando a extensão morre — é assim que o silêncio
+    // dela vira sinal de tamper em vez de sumiço da máquina inteira.
+    const heartbeatTimer = setInterval(() => {
+      void sendMachineHeartbeat(config, buildMachineHeartbeat(extensionState));
+    }, 5 * 60_000);
+    heartbeatTimer.unref();
+    void sendMachineHeartbeat(config, buildMachineHeartbeat(null));
+    fastify.addHook("onClose", (_instance, done) => {
+      clearInterval(heartbeatTimer);
+      done();
+    });
   }
 
   // ── Metrics ────────────────────────────────────────────────────────────────

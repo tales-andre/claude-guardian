@@ -8,6 +8,8 @@ import type {
   AuditEntry,
   DataType,
   Incident,
+  MachineHeartbeatPayload,
+  MachineRow,
   PolicyAction,
   Severity,
 } from "../types/index.ts";
@@ -92,6 +94,17 @@ CREATE TABLE IF NOT EXISTS custom_detectors (
   action        TEXT NOT NULL DEFAULT 'block',
   created_at    TEXT NOT NULL,
   examples_json TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS machines (
+  hostname            TEXT PRIMARY KEY,
+  username            TEXT NOT NULL DEFAULT '',
+  guardian_version    TEXT NOT NULL DEFAULT '',
+  config_hash         TEXT NOT NULL DEFAULT '',
+  extension_version   TEXT NOT NULL DEFAULT '',
+  extension_last_seen TEXT NOT NULL DEFAULT '',
+  extract_failures    TEXT NOT NULL DEFAULT '{}',
+  last_seen           TEXT NOT NULL
 );
 `;
 
@@ -476,5 +489,64 @@ export class PgStore implements GuardianStore {
     });
 
     return { incidentId: incident.id };
+  }
+
+  // ── Fleet ───────────────────────────────────────────────────────────────────
+  async upsertMachine(payload: MachineHeartbeatPayload): Promise<void> {
+    const now = new Date().toISOString();
+    const ext = payload.extension ?? null;
+    await this.pool.query(
+      `INSERT INTO machines(hostname, username, guardian_version, config_hash,
+                            extension_version, extension_last_seen, extract_failures, last_seen)
+       VALUES($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (hostname) DO UPDATE SET
+         username            = EXCLUDED.username,
+         guardian_version    = EXCLUDED.guardian_version,
+         config_hash         = EXCLUDED.config_hash,
+         extension_version   = CASE WHEN EXCLUDED.extension_version != ''
+                                    THEN EXCLUDED.extension_version
+                                    ELSE machines.extension_version END,
+         extension_last_seen = CASE WHEN EXCLUDED.extension_last_seen != ''
+                                    THEN EXCLUDED.extension_last_seen
+                                    ELSE machines.extension_last_seen END,
+         extract_failures    = CASE WHEN EXCLUDED.extension_version != ''
+                                    THEN EXCLUDED.extract_failures
+                                    ELSE machines.extract_failures END,
+         last_seen           = EXCLUDED.last_seen`,
+      [
+        payload.machine.hostname,
+        payload.machine.username,
+        payload.guardianVersion,
+        payload.configHash,
+        ext?.version ?? "",
+        ext ? now : "",
+        JSON.stringify(ext?.extractFailures ?? {}),
+        now,
+      ],
+    );
+  }
+
+  async listMachines(): Promise<MachineRow[]> {
+    const res = await this.pool.query(
+      "SELECT * FROM machines ORDER BY last_seen DESC",
+    );
+    return (res.rows as Record<string, unknown>[]).map((row) => {
+      let extractFailures: Record<string, number> = {};
+      try {
+        extractFailures = JSON.parse(String(row["extract_failures"] ?? "{}"));
+      } catch {
+        // linha corrompida não pode derrubar a listagem da frota
+      }
+      return {
+        hostname: String(row["hostname"]),
+        username: String(row["username"] ?? ""),
+        guardianVersion: String(row["guardian_version"] ?? ""),
+        configHash: String(row["config_hash"] ?? ""),
+        extensionVersion: String(row["extension_version"] ?? ""),
+        extensionLastSeen: String(row["extension_last_seen"] ?? ""),
+        extractFailures,
+        lastSeen: String(row["last_seen"]),
+      };
+    });
   }
 }

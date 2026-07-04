@@ -80,10 +80,69 @@ function failClosed(reason) {
   };
 }
 
+// ── Heartbeat + telemetria de drift ───────────────────────────────────────────
+// A cada 5 min (chrome.alarms — setInterval não sobrevive ao service worker)
+// pinga o daemon local com a versão da extensão e as falhas de extractText por
+// provider acumuladas. O daemon repassa ao fleet: extensão silenciosa =
+// tampered; extract-fail crescendo = endpoint do provider mudou (drift).
+const HEARTBEAT_ALARM = "guardian-heartbeat";
+const FAIL_KEY = "extractFailures";
+
+async function bumpExtractFailure(host) {
+  try {
+    const stored = await api.storage.local.get(FAIL_KEY);
+    const failures = stored[FAIL_KEY] || {};
+    failures[host] = (failures[host] || 0) + 1;
+    await api.storage.local.set({ [FAIL_KEY]: failures });
+  } catch {
+    // telemetria é best-effort
+  }
+}
+
+async function sendHeartbeat() {
+  const { endpoint, token } = await getSettings();
+  let failures = {};
+  try {
+    const stored = await api.storage.local.get(FAIL_KEY);
+    failures = stored[FAIL_KEY] || {};
+  } catch {
+    failures = {};
+  }
+  try {
+    const res = await fetch(endpoint.replace(/\/$/, "") + "/api/extension/heartbeat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "X-Guardian-Token": token } : {}),
+      },
+      body: JSON.stringify({
+        version: api.runtime.getManifest().version,
+        extractFailures: failures,
+      }),
+    });
+    if (res.ok) {
+      // Contadores entregues — zera para o próximo ciclo.
+      await api.storage.local.set({ [FAIL_KEY]: {} });
+    }
+  } catch {
+    // daemon offline: contadores ficam acumulados para o próximo ping
+  }
+}
+
+api.alarms.create(HEARTBEAT_ALARM, { periodInMinutes: 5 });
+api.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === HEARTBEAT_ALARM) sendHeartbeat();
+});
+sendHeartbeat();
+
 api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg && msg.type === "guardian-scan") {
     scan(msg.payload).then(sendResponse);
     return true; // async response
+  }
+  if (msg && msg.type === "guardian-extract-fail") {
+    bumpExtractFailure(String(msg.host || "unknown"));
+    return false;
   }
   return false;
 });

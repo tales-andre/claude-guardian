@@ -125,7 +125,10 @@ export function cmdEmitManagedSettings(options: EmitOptions): void {
     );
   }
 
-  const expectedHash = hashConfig(compiled.serverManaged);
+  // O daemon reporta hashConfig(managed-settings.json efetivo) no heartbeat —
+  // o hash de endpoint abaixo é o valor a colar no campo do fleet dashboard.
+  const expectedEndpointHash = hashConfig(compiled.endpointManagedSettings);
+  const serverHash = hashConfig(compiled.serverManaged);
   process.stdout.write(
     [
       `Managed settings written to ${outDir}`,
@@ -135,7 +138,8 @@ export function cmdEmitManagedSettings(options: EmitOptions): void {
       "  managed-mcp.json              → push via MDM (MCP allowlist)",
       ...browserLines,
       "",
-      `Expected config hash (for fleet tamper-detection): ${expectedHash}`,
+      `Expected config hash — fleet/tamper (endpoint managed-settings.json): ${expectedEndpointHash}`,
+      `Server-managed payload hash (referência):                             ${serverHash}`,
       "",
       "Note: against developers with local admin this is tamper-resistant and",
       "auto-reverted (the MDM re-applies) — detected, not absolutely prevented.",

@@ -46,6 +46,63 @@ describe("computeMachineStatus", () => {
       ),
     ).toBe("tampered");
   });
+
+  it("é tampered quando a extensão é exigida e nunca reportou", () => {
+    expect(
+      computeMachineStatus(
+        { configHash: EXPECTED, lastSeen: minsAgo(5) },
+        { ...opts, extensionRequired: true },
+      ),
+    ).toBe("tampered");
+  });
+
+  it("é tampered quando a extensão silenciou além da janela (máquina viva)", () => {
+    expect(
+      computeMachineStatus(
+        {
+          configHash: EXPECTED,
+          lastSeen: minsAgo(5),
+          extensionLastSeen: minsAgo(120),
+        },
+        { ...opts, extensionRequired: true },
+      ),
+    ).toBe("tampered");
+  });
+
+  it("é healthy quando a extensão exigida reportou dentro da janela", () => {
+    expect(
+      computeMachineStatus(
+        {
+          configHash: EXPECTED,
+          lastSeen: minsAgo(5),
+          extensionLastSeen: minsAgo(10),
+        },
+        { ...opts, extensionRequired: true },
+      ),
+    ).toBe("healthy");
+  });
+
+  it("máquina inteira parada fica stale, não tampered por extensão silenciosa", () => {
+    expect(
+      computeMachineStatus(
+        {
+          configHash: EXPECTED,
+          lastSeen: minsAgo(999),
+          extensionLastSeen: minsAgo(999),
+        },
+        { ...opts, extensionRequired: true },
+      ),
+    ).toBe("stale");
+  });
+
+  it("sem extensionRequired, extensão silenciosa não muda o status", () => {
+    expect(
+      computeMachineStatus(
+        { configHash: EXPECTED, lastSeen: minsAgo(5) },
+        opts,
+      ),
+    ).toBe("healthy");
+  });
 });
 
 describe("hashConfig", () => {

@@ -938,6 +938,10 @@
         <span class="nav-label">Approvals</span>
       </button>
       <div class="nav-section-label">Security</div>
+      <button class="nav-item" onclick="showTab('fleet')">
+        <i data-lucide="monitor-smartphone"></i>
+        <span class="nav-label">Fleet</span>
+      </button>
       <button class="nav-item" onclick="showTab('audit')">
         <i data-lucide="file-text"></i>
         <span class="nav-label">Audit Log</span>
@@ -1120,6 +1124,35 @@
             <table>
               <thead><tr><th>Requested</th><th>Incident</th><th>Scope</th><th>Justification</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead>
               <tbody id="approvals-table"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fleet -->
+      <div class="tab-content" id="tab-fleet">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Fleet</h1>
+            <p style="color:var(--text-2);font-size:13px;margin-top:4px">
+              Máquinas reportando heartbeat. <b>tampered</b> = hash de config divergente
+              ou extensão de navegador silenciosa; <b>stale</b> = máquina sem reportar.
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="fleet-expected-hash" placeholder="expected config hash (opcional)"
+                   style="width:280px" title="Hash impresso pelo emit-managed-settings">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2)">
+              <input type="checkbox" id="fleet-ext-required" checked> extensão obrigatória
+            </label>
+            <button class="btn" onclick="loadFleet()">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Status</th><th>Hostname</th><th>User</th><th>Guardian</th><th>Extensão</th><th>Ext. visto</th><th>Extract fails (drift)</th><th>Último heartbeat</th></tr></thead>
+              <tbody id="fleet-table"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -1335,7 +1368,7 @@ function toast(msg, ok = true) {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
-const PAGE_NAMES = { overview: 'Overview', incidents: 'Incidents', approvals: 'Approvals', audit: 'Audit Log', policies: 'Policies' };
+const PAGE_NAMES = { overview: 'Overview', incidents: 'Incidents', approvals: 'Approvals', fleet: 'Fleet', audit: 'Audit Log', policies: 'Policies' };
 
 function showTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -1346,9 +1379,47 @@ function showTab(name) {
   if (pageEl) pageEl.textContent = PAGE_NAMES[name] || name;
   if (name === 'incidents') loadIncidents();
   if (name === 'approvals') loadApprovals();
+  if (name === 'fleet') loadFleet();
   if (name === 'audit') loadAudit();
   if (name === 'policies') loadPolicies();
   if (name === 'overview') { loadMetrics(); loadRecentIncidents(); }
+}
+
+async function loadFleet() {
+  const tbody = document.getElementById('fleet-table');
+  try {
+    const expected = (document.getElementById('fleet-expected-hash').value || '').trim();
+    const extReq = document.getElementById('fleet-ext-required').checked;
+    const params = new URLSearchParams();
+    if (expected) params.set('expectedHash', expected);
+    if (extReq) params.set('extensionRequired', '1');
+    const machines = await apiFetch('/api/fleet?' + params.toString());
+    if (!machines.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty">Nenhuma máquina reportou heartbeat ainda.</td></tr>';
+      return;
+    }
+    const badge = (s) => {
+      const color = s === 'healthy' ? 'var(--ok, #22c55e)' : s === 'stale' ? 'var(--warn, #eab308)' : 'var(--danger, #ef4444)';
+      return `<span style="color:${color};font-weight:600">${s}</span>`;
+    };
+    const fails = (f) => {
+      const entries = Object.entries(f || {});
+      if (!entries.length) return '—';
+      return entries.map(([h, n]) => `${esc(h)}: ${n}`).join('<br>');
+    };
+    tbody.innerHTML = machines.map(m => `<tr>
+      <td>${badge(m.status)}</td>
+      <td>${esc(m.hostname)}</td>
+      <td>${esc(m.username)}</td>
+      <td>${esc(m.guardianVersion || '—')}</td>
+      <td>${esc(m.extensionVersion || '—')}</td>
+      <td>${m.extensionLastSeen ? new Date(m.extensionLastSeen).toLocaleString() : '—'}</td>
+      <td>${fails(m.extractFailures)}</td>
+      <td>${new Date(m.lastSeen).toLocaleString()}</td>
+    </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Erro ao carregar fleet.</td></tr>';
+  }
 }
 
 function showTokenPrompt() {

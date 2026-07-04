@@ -14,18 +14,37 @@ const DEFAULT_STALE_AFTER_MS = 60 * 60_000; // 1 hora
 interface MachineState {
   configHash: string;
   lastSeen: string;
+  /** Último ping da extensão de navegador (via daemon local). */
+  extensionLastSeen?: string;
 }
 
 interface StatusOptions {
   expectedConfigHash: string;
   now?: Date;
   staleAfterMs?: number;
+  /** Org exige a extensão de navegador: silêncio dela = tampered. */
+  extensionRequired?: boolean;
+  extensionStaleAfterMs?: number;
+}
+
+function olderThan(
+  timestamp: string | undefined,
+  now: Date,
+  windowMs: number,
+): boolean {
+  if (!timestamp) return true;
+  const ms = new Date(timestamp).getTime();
+  return Number.isNaN(ms) || now.getTime() - ms > windowMs;
 }
 
 /**
  * Classifica uma máquina. Prioridade: tampered > stale > healthy.
- * tampered  = hash da config diferente do esperado (alguém mexeu na policy).
- * stale     = parou de reportar dentro da janela (possível guardian desligado).
+ * tampered  = hash da config diferente do esperado (alguém mexeu na policy),
+ *             ou máquina viva com a extensão exigida silenciosa/ausente
+ *             (extensão removida/desabilitada é o análogo browser do
+ *             provider-evasion).
+ * stale     = a máquina inteira parou de reportar (guardian desligado) — nesse
+ *             caso o silêncio da extensão é consequência, não tamper.
  */
 export function computeMachineStatus(
   machine: MachineState,
@@ -35,9 +54,19 @@ export function computeMachineStatus(
 
   const now = opts.now ?? new Date();
   const staleAfter = opts.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
-  const lastSeenMs = new Date(machine.lastSeen).getTime();
-  if (Number.isNaN(lastSeenMs) || now.getTime() - lastSeenMs > staleAfter) {
+  if (olderThan(machine.lastSeen, now, staleAfter)) {
     return "stale";
+  }
+
+  if (
+    opts.extensionRequired &&
+    olderThan(
+      machine.extensionLastSeen,
+      now,
+      opts.extensionStaleAfterMs ?? staleAfter,
+    )
+  ) {
+    return "tampered";
   }
 
   return "healthy";

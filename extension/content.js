@@ -17,6 +17,20 @@
   ).join("");
   document.documentElement.dataset.guardianNonce = NONCE;
 
+  // ── Telemetria de drift: injected → background ────────────────────────────
+  window.addEventListener("message", (e) => {
+    const d = e.data;
+    if (!d || d.__guardian !== "extract-fail" || d.nonce !== NONCE) return;
+    try {
+      api.runtime.sendMessage({
+        type: "guardian-extract-fail",
+        host: String(d.host || location.hostname),
+      });
+    } catch {
+      // telemetria é best-effort
+    }
+  });
+
   // ── Bridge: injected (page) → background (extension) → injected ───────────
   window.addEventListener("message", async (e) => {
     const d = e.data;

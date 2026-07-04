@@ -115,6 +115,35 @@ export interface AgentIngestPayload {
   auditType: string;
 }
 
+// ── Fleet heartbeat ───────────────────────────────────────────────────────────
+// Enviado periodicamente por cada máquina-cliente ao central. O hash da config
+// managed efetiva permite ao admin detectar adulteração (status "tampered").
+
+export interface ExtensionHeartbeat {
+  version: string;
+  /** Falhas de extractText por provider (sinal de drift de endpoint). */
+  extractFailures?: Record<string, number>;
+}
+
+export interface MachineHeartbeatPayload {
+  machine: { hostname: string; username: string };
+  guardianVersion: string;
+  configHash: string;
+  /** null/ausente = máquina sem extensão de navegador reportando. */
+  extension?: ExtensionHeartbeat | null;
+}
+
+export interface MachineRow {
+  hostname: string;
+  username: string;
+  guardianVersion: string;
+  configHash: string;
+  extensionVersion: string;
+  extensionLastSeen: string;
+  extractFailures: Record<string, number>;
+  lastSeen: string;
+}
+
 // ── Audit log entry (chained hash) ────────────────────────────────────────────
 
 export interface AuditEntry {

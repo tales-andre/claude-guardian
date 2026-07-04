@@ -5,6 +5,8 @@ import type {
   AuditEntry,
   Config,
   Incident,
+  MachineHeartbeatPayload,
+  MachineRow,
 } from "../types/index.ts";
 
 // ── Camada de storage do servidor ─────────────────────────────────────────────
@@ -95,6 +97,10 @@ export interface GuardianStore {
   ingestAgentEvent(
     payload: AgentIngestPayload,
   ): Promise<{ incidentId: string }>;
+
+  // Fleet (heartbeats de máquina)
+  upsertMachine(payload: MachineHeartbeatPayload): Promise<void>;
+  listMachines(): Promise<MachineRow[]>;
 }
 
 export async function createStore(config: Config): Promise<GuardianStore> {
