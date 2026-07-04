@@ -102,15 +102,47 @@
     e.stopImmediatePropagation();
   }
 
+  // Sites cujo anexo é escaneado na camada de REDE (injected.js) — nesses NÃO
+  // bloqueamos o drop na UI, porque o overlay deles ignora reset sintético
+  // (isTrusted=false) e ficaria preso. O claude.ai embute o conteúdo do anexo
+  // inline no /completion, então o injected.js escaneia lá; a UI-layer só
+  // travaria o overlay "solte arquivos aqui".
+  const NETWORK_ENFORCED_DROP = /(^|\.)claude\.ai$/i;
+
+  // Ao bloquear um drop, paramos a propagação para o handler de drop do SITE
+  // nunca ler os arquivos — mas é esse handler que esconde o overlay do site.
+  // Reencenamos o fim do arraste (dragleave + drop + dragend) com DataTransfer
+  // VAZIO para o site sumir com o overlay sem receber arquivo. Funciona em
+  // sites que aceitam eventos sintéticos (ex. Gemini); os que não aceitam
+  // entram em NETWORK_ENFORCED_DROP acima.
+  function resetDropUI(target) {
+    const el = target && target.dispatchEvent ? target : document.body || document;
+    for (const type of ["dragleave", "drop", "dragend"]) {
+      try {
+        el.dispatchEvent(
+          new DragEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer: new DataTransfer(),
+          }),
+        );
+      } catch {
+        /* DragEvent/DataTransfer indisponível — ignora */
+      }
+    }
+  }
+
   // Drag-and-drop
   document.addEventListener("drop", (e) => {
     const files = e.dataTransfer && e.dataTransfer.files;
-    if (files && files.length) {
-      blockEvent(e);
-      inspectFiles([...files]).then((ok) => {
-        if (ok) console.info("[guardian] anexos liberados — re-arraste para anexar");
-      });
-    }
+    if (!(files && files.length)) return;
+    // Sites com enforcement na rede: deixa o drop fluir (overlay some sozinho).
+    if (NETWORK_ENFORCED_DROP.test(location.hostname)) return;
+    blockEvent(e);
+    resetDropUI(e.target);
+    inspectFiles([...files]).then((ok) => {
+      if (ok) console.info("[guardian] anexos liberados — re-arraste para anexar");
+    });
   }, true);
 
   // Paste of files/images
@@ -125,15 +157,35 @@
   // File input dialog
   document.addEventListener("change", (e) => {
     const t = e.target;
-    if (t && t.tagName === "INPUT" && t.type === "file" && t.files && t.files.length) {
-      const files = [...t.files];
-      inspectFiles(files).then((ok) => {
-        if (!ok) {
-          t.value = "";
-          blockEvent(e);
-        }
-      });
+    if (!(t && t.tagName === "INPUT" && t.type === "file" && t.files && t.files.length)) {
+      return;
     }
+    // Re-anexo já liberado pelo scan: deixa passar (evita loop e re-bloqueio).
+    if (t.__guardianCleared) {
+      t.__guardianCleared = false;
+      return;
+    }
+    const files = [...t.files];
+    // BLOCK-FIRST: o scan é assíncrono. Se esperássemos o resultado para só
+    // então chamar blockEvent, o evento `change` já teria propagado ao site,
+    // que leu t.files e subiu o arquivo — era exatamente o furo (overlay
+    // aparecia mas o anexo ficava e podia ser enviado). Paramos AGORA, na fase
+    // de captura (antes de qualquer listener do site), limpamos o input, e só
+    // re-anexamos se o scan liberar.
+    blockEvent(e);
+    t.value = "";
+    inspectFiles(files).then((ok) => {
+      if (!ok) return; // overlay já apareceu; input limpo, nada anexado
+      try {
+        const dt = new DataTransfer();
+        for (const f of files) dt.items.add(f);
+        t.files = dt.files;
+        t.__guardianCleared = true;
+        t.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch {
+        console.info("[guardian] anexos liberados — selecione novamente para anexar");
+      }
+    });
   }, true);
 
   // ── Overlay UI ────────────────────────────────────────────────────────────

@@ -87,7 +87,25 @@
       return method === "POST" && /\/(completion|retry_completion|append_message|messages)\b/i.test(url);
     },
     extractText(body) {
-      return textFromMessages(parseJson(body));
+      const json = parseJson(body);
+      if (!json) return "";
+      const parts = [];
+      // Texto digitado pelo usuário.
+      if (typeof json.prompt === "string" && json.prompt) parts.push(json.prompt);
+      // Anexos: arquivos de texto pequenos são embutidos INLINE no /completion,
+      // com o conteúdo em attachments[].extracted_content (+ nome). É por AQUI
+      // que o conteúdo do anexo trafega no claude.ai (não há upload multipart
+      // para arquivos pequenos). Sem escanear isto, um anexo com segredo passa
+      // mesmo sem nenhum texto digitado (prompt vazio → antigo fail-open).
+      if (Array.isArray(json.attachments)) {
+        for (const a of json.attachments) {
+          if (a && typeof a.extracted_content === "string") parts.push(a.extracted_content);
+          if (a && typeof a.file_name === "string") parts.push(a.file_name);
+        }
+      }
+      // Formatos alternativos (retry/append via messages[]).
+      if (parts.length === 0) return textFromMessages(json);
+      return parts.join("\n");
     },
     injectRedaction(body, redactedText) {
       const json = parseJson(body);
@@ -287,6 +305,73 @@
     return "";
   }
 
+  // ── Upload interception (endpoint-agnostic) ───────────────────────────────
+  // Anexos NÃO passam pelo request de "enviar mensagem": o site sobe o arquivo
+  // num POST/PUT separado (multipart/FormData ou File/Blob cru) ANTES de mandar
+  // a mensagem. Reconhecer o upload pelo TIPO do corpo (não pela URL) cobre
+  // qualquer endpoint de qualquer site sem precisar de um adapter por upload.
+  // Esta é a camada de ENFORCEMENT dos anexos: sem ela, o overlay da UI
+  // (content.js) é só cosmético e o arquivo sai mesmo assim. Política igual à do
+  // texto: FAIL-OPEN quando não verificável, bloqueia só em detecção real;
+  // binário sem conteúdo legível ainda é barrado por NOME no daemon
+  // (BLOCKED_FILE_RE do scanWeb).
+  const UPLOAD_TEXT_EXT_RE =
+    /\.(txt|json|ya?ml|env|js|ts|py|java|cs|rb|go|sh|sql|xml|ini|conf|cfg|toml|pem|key|csv|md|log)$/i;
+
+  function isFileLike(v) {
+    return (
+      v &&
+      typeof v === "object" &&
+      typeof v.text === "function" &&
+      typeof v.name === "string"
+    );
+  }
+  // Checagem síncrona e barata: só corpos que PODEM carregar arquivo entram no
+  // caminho assíncrono (não muda o timing dos demais POSTs).
+  function hasFileBody(body) {
+    if (typeof FormData !== "undefined" && body instanceof FormData) return true;
+    if (typeof Blob !== "undefined" && body instanceof Blob) return true; // cobre File
+    return false;
+  }
+  async function fileEntry(file) {
+    const name = file.name || "upload.bin";
+    let content;
+    if (file.size < 512 * 1024 && UPLOAD_TEXT_EXT_RE.test(name)) {
+      try {
+        content = await file.text();
+      } catch {
+        content = undefined;
+      }
+    }
+    return { name, content };
+  }
+  async function extractUploadFiles(body) {
+    const out = [];
+    try {
+      if (typeof FormData !== "undefined" && body instanceof FormData) {
+        for (const [, v] of body.entries()) {
+          if (isFileLike(v)) out.push(await fileEntry(v));
+        }
+      } else if (isFileLike(body)) {
+        out.push(await fileEntry(body));
+      }
+    } catch {
+      /* corpo ilegível — sem anexos extraíveis */
+    }
+    return out;
+  }
+  // true se um upload reconhecido deve ser bloqueado (detecção real de segredo
+  // no conteúdo OU bloqueio por nome vindo do daemon). FAIL-OPEN se offline.
+  async function uploadBlocks(files) {
+    if (!files.length) return false;
+    const verdict = await requestScan({
+      files,
+      context: { url: location.href, tabTitle: document.title },
+    });
+    if (verdict.offline) return false;
+    return verdict.action === "block" || verdict.action === "require-approval";
+  }
+
   // Shared verdict logic for a recognized send. Returns:
   //  { block: true } | { block: false, redactedBody?: string }
   // Fail-OPEN: um envio que não pôde ser verificado (texto não extraível ou
@@ -341,6 +426,29 @@
       typeof input === "string" ? input : isRequest ? input.url : String(input || "");
     const method = (init?.method || (isRequest && input.method) || "GET").toUpperCase();
 
+    // Upload de anexo (qualquer endpoint): decide pelo TIPO do corpo, não pela
+    // URL. Roda ANTES do caminho de texto — o arquivo nunca deve sair sem scan.
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      let uploadBody = init?.body != null ? init.body : null;
+      if (uploadBody == null && isRequest) {
+        try {
+          const ct = input.headers?.get?.("content-type");
+          if (ct && /multipart\/form-data/i.test(ct)) {
+            uploadBody = await input.clone().formData();
+          }
+        } catch {
+          uploadBody = null;
+        }
+      }
+      if (hasFileBody(uploadBody)) {
+        const files = await extractUploadFiles(uploadBody);
+        if (await uploadBlocks(files)) {
+          console.info("[guardian] anexo bloqueado (fetch)");
+          throw new TypeError("Failed to fetch — anexo bloqueado pelo Claude Guardian");
+        }
+      }
+    }
+
     if (adapter.isSendRequest(url, method)) {
       // O corpo pode vir no init OU dentro de um Request (fetch(new Request(...))).
       // Ler só init.body deixava envios via Request saírem sem scan (fail-open).
@@ -393,14 +501,33 @@
     XHR.prototype.send = function (body) {
       const method = this.__guardianMethod || "GET";
       const url = this.__guardianUrl || "";
-      if (!adapter.isSendRequest(url, method)) {
+      const isUpload =
+        (method === "POST" || method === "PUT" || method === "PATCH") &&
+        hasFileBody(body);
+      const isSend = adapter.isSendRequest(url, method);
+      // Só entra no caminho assíncrono se for upload OU envio reconhecido — os
+      // demais XHRs seguem síncronos (sem mudança de timing).
+      if (!isUpload && !isSend) {
         return origSend.call(this, body);
       }
+      const self = this;
       // Normaliza o corpo (string, URLSearchParams, Blob, ArrayBuffer…) antes
       // de decidir — corpo não-string não pode mais escapar do scan.
-      bodyToString(body)
-        .then((text) => decide(text))
-        .then(({ block, redactedBody }) => {
+      (async () => {
+        if (isUpload) {
+          const files = await extractUploadFiles(body);
+          if (await uploadBlocks(files)) {
+            console.info("[guardian] anexo bloqueado (xhr)");
+            return { block: true };
+          }
+        }
+        if (!isSend) return { block: false, passthrough: true };
+        return decide(await bodyToString(body));
+      })()
+        .then(({ block, passthrough, redactedBody }) => {
+        if (passthrough) {
+          return origSend.call(self, body);
+        }
         if (block) {
           // Nenhum byte saiu (origSend nunca foi chamado). Sem a send flag,
           // abort() é no-op: readyState fica preso em OPENED e o app (Gemini/
@@ -410,20 +537,20 @@
           // request que falhou e liberar a UI.
           try {
             console.info("[guardian] envio bloqueado (xhr)");
-            Object.defineProperty(this, "readyState", { value: 4, configurable: true });
-            Object.defineProperty(this, "status", { value: 0, configurable: true });
-            Object.defineProperty(this, "statusText", { value: "", configurable: true });
-            Object.defineProperty(this, "response", { value: "", configurable: true });
-            Object.defineProperty(this, "responseText", { value: "", configurable: true });
-            this.dispatchEvent(new Event("readystatechange"));
-            this.dispatchEvent(new ProgressEvent("error"));
-            this.dispatchEvent(new ProgressEvent("loadend"));
+            Object.defineProperty(self, "readyState", { value: 4, configurable: true });
+            Object.defineProperty(self, "status", { value: 0, configurable: true });
+            Object.defineProperty(self, "statusText", { value: "", configurable: true });
+            Object.defineProperty(self, "response", { value: "", configurable: true });
+            Object.defineProperty(self, "responseText", { value: "", configurable: true });
+            self.dispatchEvent(new Event("readystatechange"));
+            self.dispatchEvent(new ProgressEvent("error"));
+            self.dispatchEvent(new ProgressEvent("loadend"));
           } catch {
             /* ignore */
           }
           return;
         }
-        origSend.call(this, typeof redactedBody === "string" ? redactedBody : body);
+        origSend.call(self, typeof redactedBody === "string" ? redactedBody : body);
       });
     };
   }
