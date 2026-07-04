@@ -103,7 +103,17 @@ Additive central-server mode; local mode is unchanged when the new config fields
 - **Server storage**: `buildServer` uses the async `GuardianStore` interface — `SqliteStore` (wraps the sync libs, default) or `PgStore` (when `databaseUrl`/`DATABASE_URL` is set; mirrored schema, own hash chain). Hooks never use this layer.
 - **Agent endpoints**: `POST /api/agent/ingest` (idempotent upsert; findings arrive without `rawValue`) and `GET /api/agent/approvals/active?scope=`, both authed by `X-Guardian-Agent-Key` against `agentApiKey` (fail-closed when unset).
 - **Client side**: when `centralUrl`+`centralApiKey` are configured, hooks mirror incidents/approvals via a disk outbox (`<db-dir>/outbox/`) flushed by a detached `central-flush.ts` process (store-and-forward, zero added latency), and check the central server for active approvals before re-blocking (1.5 s timeout, silent fallback to local).
-- **Deploy**: `Dockerfile` + `docker-compose.yml` (Postgres) + Helm chart in `deploy/helm/claude-guardian` (EKS/ALB/RDS). Client rollout via `enterprise/install-agent.sh --server <url> --key <agent-key>` (wraps `init --central-url --central-key`). Docs: `docs/ENTERPRISE.md`.
+- **Deploy**: `Dockerfile` + `docker-compose.yml` (Postgres) + Helm chart in `deploy/helm/claude-guardian` (EKS/ALB/RDS). Client rollout via `enterprise/install-agent.sh --server <url> --key <agent-key>` (wraps `init --central-url --central-key`; also installs the daemon as a systemd/launchd service) or `enterprise/install-agent.ps1` on Windows (scheduled task). Docs: `docs/ENTERPRISE.md`.
+
+### Browser extension (`extension/`)
+
+MV3 extension (plain JS, no build step; `manifest.firefox.json` for Firefox) covering claude.ai, ChatGPT, Gemini, Copilot, Mistral and Adapta One. `injected.js` runs as a `world: "MAIN"` content script hooking `fetch`/XHR (per-site `ADAPTERS` registry, fail-closed); messages between `content.js` and `injected.js` are authenticated by a `crypto.getRandomValues` nonce handed over via DOM attribute at `document_start` (anti-spoof). Scans go through `background.js` → local daemon `POST /api/scan-web` (`src/lib/web-scan.ts`, virtual tools `WebPrompt`/`WebUpload`; route registered only in SQLite mode). Enterprise config comes from `chrome.storage.managed` (options page becomes read-only). Adapters for Gemini/Copilot/Mistral/Adapta still need real-traffic validation — see `docs/ADAPTER-VALIDATION.md`.
+
+### Fleet & managed settings
+
+- `src/lib/managed-settings.ts` compiles console + MDM artifacts (`emit-managed-settings` CLI); `src/lib/browser-policies.ts` compiles browser policies per channel (Linux JSON, Windows `.reg`, macOS `.mobileconfig`, Firefox `policies.json`) when `--extension-id` is passed.
+- `machines` table + `POST /api/agent/heartbeat` + `GET /api/fleet` (status via `computeMachineStatus`: hash mismatch or required-but-silent extension = `tampered`, silent machine = `stale`). Local daemon receives `POST /api/extension/heartbeat` (chrome.alarms ping every 5 min, carries `extractFailures` per provider = endpoint-drift signal) and mirrors machine heartbeats to the central every 5 min (`src/lib/fleet-client.ts`, best-effort).
+- `GUARDIAN_BIND_HOST` controls the server bind address (`GUARDIAN_HOST` is reserved for hook host detection claude/kiro in `src/hosts/`).
 
 ## Key behaviors to know
 
