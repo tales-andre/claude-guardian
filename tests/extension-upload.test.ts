@@ -187,4 +187,33 @@ describe("injected.js — anexo inline no /completion do claude.ai", () => {
     });
     expect(fetchCalls).toHaveLength(1);
   });
+
+  // Fail-closed: se o daemon não verifica (offline), anexo é BLOQUEADO; texto
+  // puro continua FAIL-OPEN (política da org).
+  const offlineVerdict: Verdict = () => ({ offline: true, action: "block" });
+
+  it("FAIL-CLOSED: bloqueia upload FormData quando o daemon está offline", async () => {
+    const { doFetch, fetchCalls } = setupInjected(offlineVerdict);
+    const fd = new FormData();
+    fd.append("file", new File(["qualquer coisa"], "a.txt", { type: "text/plain" }));
+    await expect(
+      doFetch("https://claude.ai/api/upload", { method: "POST", body: fd }),
+    ).rejects.toThrow(/bloqueado/i);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it("FAIL-CLOSED: bloqueia /completion com anexo quando offline", async () => {
+    const { doFetch, fetchCalls } = setupInjected(offlineVerdict);
+    await expect(
+      doFetch(COMPLETION_URL, { method: "POST", body: completionBody("qualquer") }),
+    ).rejects.toThrow(/bloqueado/i);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it("FAIL-OPEN: envio de TEXTO puro passa quando offline (sem anexo)", async () => {
+    const { doFetch, fetchCalls } = setupInjected(offlineVerdict);
+    const body = JSON.stringify({ prompt: "olá, tudo bem?", attachments: [], files: [] });
+    await doFetch(COMPLETION_URL, { method: "POST", body });
+    expect(fetchCalls).toHaveLength(1);
+  });
 });

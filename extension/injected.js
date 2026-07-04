@@ -107,6 +107,15 @@
       if (parts.length === 0) return textFromMessages(json);
       return parts.join("\n");
     },
+    // Sinaliza que o envio carrega anexo → decide() aplica FAIL-CLOSED offline.
+    carriesAttachment(body) {
+      const json = parseJson(body);
+      return !!(
+        json &&
+        ((Array.isArray(json.attachments) && json.attachments.length) ||
+          (Array.isArray(json.files) && json.files.length))
+      );
+    },
     injectRedaction(body, redactedText) {
       const json = parseJson(body);
       if (!json) return null;
@@ -360,15 +369,16 @@
     }
     return out;
   }
-  // true se um upload reconhecido deve ser bloqueado (detecção real de segredo
-  // no conteúdo OU bloqueio por nome vindo do daemon). FAIL-OPEN se offline.
+  // true se um upload reconhecido deve ser bloqueado. Ao contrário do texto,
+  // anexo é FAIL-CLOSED: se o daemon não pôde verificar (offline/sem resposta),
+  // BLOQUEIA — o conteúdo de um arquivo não sai desta máquina sem verificação.
   async function uploadBlocks(files) {
     if (!files.length) return false;
     const verdict = await requestScan({
       files,
       context: { url: location.href, tabTitle: document.title },
     });
-    if (verdict.offline) return false;
+    if (verdict.offline) return true; // FAIL-CLOSED para anexo
     return verdict.action === "block" || verdict.action === "require-approval";
   }
 
@@ -396,10 +406,14 @@
     }
     const verdict = await requestScan({ text, context: { url: location.href, tabTitle: document.title } });
     if (verdict.offline) {
-      // Não foi possível verificar (daemon offline / sem resposta). FAIL-OPEN:
-      // deixa o envio passar em vez de travar o site. A saúde do daemon é
-      // acompanhada separadamente pelo heartbeat/fleet.
-      return { block: false };
+      // Não foi possível verificar (daemon offline / sem resposta).
+      // Texto puro: FAIL-OPEN (política da org) — não trava o site.
+      // Envio que carrega ANEXO: FAIL-CLOSED — o conteúdo do arquivo não pode
+      // sair sem verificação (ex. claude.ai embute o anexo inline no /completion).
+      const carriesFile =
+        typeof adapter.carriesAttachment === "function" &&
+        adapter.carriesAttachment(body);
+      return { block: !!carriesFile };
     }
     if (verdict.action === "block" || verdict.action === "require-approval") {
       return { block: true };
