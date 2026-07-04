@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Claude Guardian — DLP for AI chat",
   "version": "0.2.0",
-  "description": "Escaneia prompts e uploads em claude.ai, ChatGPT, Gemini, Copilot, Mistral e Adapta One contra o backend local do claude-guardian. Fail-closed.",
+  "description": "Escaneia prompts e uploads em claude.ai, ChatGPT, Gemini, Copilot, Mistral e Adapta One contra o backend local do claude-guardian. Bloqueia quando detecta segredo; nao trava o site quando nao consegue verificar (fail-open).",
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://claude.ai/*",

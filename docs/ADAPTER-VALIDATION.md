@@ -12,7 +12,7 @@ a frota no dia 1.
 |---|---|---|---|
 | Claude (claude.ai) | `claudeAdapter` | ✅ maduro | `POST /(completion\|retry_completion\|append_message\|messages)`, body JSON `prompt`/`messages`; redaction in-place suportada |
 | ChatGPT | `chatgptAdapter` | ✅ maduro | `POST /backend-api/(f/)?conversation`, `messages[].content.parts`; sem redaction (block) |
-| Gemini | `geminiAdapter` | ⚠️ **pendente** | `batchexecute` com `f.req` urlencoded; extração heurística da maior string — validar formato real |
+| Gemini | `geminiAdapter` | ✅ **validado com tráfego real** (2026-07-04) | Envio = XHR `POST …/assistant.lamda.BardFrontendService/StreamGenerate` com `f.req` urlencoded; extração decodifica todas as strings do envelope (nunca retorna vazio p/ corpo não-vazio). Bloqueio simula falha de rede (readyState 4 + error/loadend) — UI do Gemini não trava |
 | Microsoft Copilot | `copilotAdapter` | ⚠️ **pendente** | Endpoints HTTP cobertos por palpite; **muitos fluxos usam WebSocket (gap residual conhecido, não coberto)** |
 | Mistral (Le Chat) | `mistralAdapter` | ⚠️ **pendente** | Endpoint/body por palpite |
 | Adapta One | `adaptaAdapter` | ⚠️ **pendente** | Endpoint/body por palpite |

@@ -1,6 +1,8 @@
 // Service worker: the only context allowed to talk to localhost.
 // Content scripts message us; we POST to the guardian and relay the verdict.
-// Fail-closed: any network/parse error becomes a BLOCK.
+// Em erro de rede/parse retorna um veredito `offline: true`; a camada de
+// enforcement (injected.js) trata isso como FAIL-OPEN (deixa passar + registra),
+// então um envio não-verificável não trava o site.
 
 const api = globalThis.browser ?? globalThis.chrome;
 

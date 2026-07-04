@@ -2,9 +2,15 @@
 
 Estende a proteção DLP do `claude-guardian` para os principais chats de IA no
 browser. A extensão é só "olho e mão": captura prompts e uploads e delega
-**todo** o scan ao backend local (`POST /api/scan-web`). **Fail-closed**: se o
-guardian estiver offline — ou se um envio for reconhecido mas o texto não puder
-ser extraído — o envio é bloqueado.
+**todo** o scan ao backend local (`POST /api/scan-web`).
+
+**Política FAIL-OPEN** (para não quebrar os sites): a extensão **bloqueia
+somente quando um segredo é de fato detectado**. Se um envio é reconhecido mas
+**não pode ser verificado** — o daemon está offline, ou o formato do site mudou
+e o texto não pôde ser extraído — o envio **passa** e a divergência é registrada
+como *drift* (visível no fleet), em vez de travar o site. Isso troca cobertura
+absoluta por não interferir na navegação; um envio não-verificável escapa sem
+varredura nesses casos.
 
 ## Sites suportados
 
@@ -82,16 +88,20 @@ usuário não escolhe nem consegue alterar:
 - **Anti-spoofing**: `content.js` e `injected.js` trocam mensagens autenticadas
   por um **nonce** gerado por `crypto.getRandomValues` e entregue via atributo
   DOM lido+removido em `document_start` — antes de qualquer script do site
-  rodar. Scripts da página não conseguem forjar um `scan-result: allow`; sem
-  nonce válido, o scan expira e bloqueia (fail-closed).
+  rodar. Scripts da página não conseguem forjar um `scan-result: allow`. O
+  handshake é **independente de ordem** (`MutationObserver`): como a ordem entre
+  o content script `MAIN` e o `ISOLATED` não é garantida pelo Chromium, se o
+  `injected.js` rodar primeiro ele observa o nonce até o `content.js` gravá-lo,
+  em vez de assumir vazio.
   > Requisito: `world: "MAIN"` em content script exige Chrome/Edge 111+ e
   > Firefox 128+.
 
 ## Limitações conhecidas
 
 - Os adapters dependem de superfícies **não-oficiais** de cada site
-  (endpoint/formato de body podem mudar sem aviso). Quando mudam, o envio é
-  bloqueado (fail-closed) até o adapter ser corrigido.
+  (endpoint/formato de body podem mudar sem aviso). Quando mudam, o envio
+  **passa sem varredura** (fail-open) e o drift é registrado no fleet até o
+  adapter ser corrigido — a extensão não trava o site.
 - Adapters marcados com `// TODO: validar ... com tráfego real` em
   `injected.js` (**Gemini, Copilot, Mistral, Adapta One**) foram escritos com o
   melhor palpite e **precisam ser validados** inspecionando o Network real do
@@ -107,10 +117,11 @@ usuário não escolhe nem consegue alterar:
 | Caso | Esperado |
 |---|---|
 | Prompt limpo | passa |
-| Prompt com `sk-ant-...` / AWS key | bloqueado (request rejeitado no Network) |
+| Prompt com `sk-ant-...` / AWS key | **bloqueado** (detecção real; request rejeitado no Network + overlay) |
 | Arrastar `.env` / `.pem` | bloqueado por nome |
-| Guardian desligado | bloqueado (fail-closed) |
-| Envio reconhecido mas texto não extraído | bloqueado (fail-closed) |
+| Guardian desligado | **passa** (fail-open) — envio não fica travado |
+| Envio reconhecido mas texto não extraído | **passa** (fail-open) + drift registrado no fleet |
 
 > Rode o caso "prompt com segredo" em **cada** site suportado e confirme no
 > DevTools → Network que o request de envio foi rejeitado e o overlay apareceu.
+> Nos casos fail-open, confirme que o envio **passa** normalmente (site não trava).

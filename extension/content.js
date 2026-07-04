@@ -44,7 +44,10 @@
       result = { action: "block", reason: "Extensão não conseguiu falar com o background (fail-closed).", offline: true };
     }
 
-    if (result && result.action === "block") {
+    // Só mostra o overlay de bloqueio para DETECÇÃO real de segredo. Respostas
+    // "offline" (daemon fora / sem resposta) são fail-open: o envio passa, então
+    // não exibimos overlay de bloqueio enganoso.
+    if (result && result.action === "block" && !result.offline) {
       showOverlay("block", formatBlock(result));
     } else if (result && result.action === "require-approval") {
       showOverlay("approval", formatApproval(result));
@@ -134,7 +137,15 @@
   }, true);
 
   // ── Overlay UI ────────────────────────────────────────────────────────────
+  // Aviso de segurança institucional: painel slate, acento fino por estado
+  // (vermelho = bloqueio, âmbar = aprovação), achados como tabela de evidência
+  // de auditoria. Sem webfonts (CSP dos hosts) — a personalidade vem de peso,
+  // caixa alta espaçada e mono para evidência. Dark mode via prefers-color-scheme.
   let overlayEl = null;
+
+  const SEV_LABEL = { critical: "Crítico", high: "Alto", medium: "Médio", low: "Baixo" };
+
+  const SHIELD_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.8 4.8 5.6v5.5c0 4.5 3 8.5 7.2 10.1 4.2-1.6 7.2-5.6 7.2-10.1V5.6L12 2.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 
   function ensureOverlay() {
     if (overlayEl) return overlayEl;
@@ -143,27 +154,83 @@
     overlayEl.innerHTML = `
       <style>
         #guardian-overlay { position: fixed; inset: 0; z-index: 2147483647;
-          background: rgba(15,15,20,.55); display: none; align-items: center;
-          justify-content: center; font-family: system-ui, sans-serif; }
+          display: none; align-items: center; justify-content: center; padding: 16px;
+          background: rgba(9, 11, 15, .62); backdrop-filter: blur(3px) saturate(.85);
+          font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          -webkit-font-smoothing: antialiased; text-align: left; }
         #guardian-overlay.show { display: flex; }
-        #guardian-card { background: #fff; color: #1a1a1a; max-width: 480px;
-          width: calc(100% - 2rem); border-radius: 12px; padding: 1.5rem 1.75rem;
-          box-shadow: 0 10px 40px rgba(0,0,0,.35); }
-        #guardian-card h2 { font-size: 1.1rem; margin: 0 0 .5rem; display:flex; gap:.5rem; align-items:center; }
-        #guardian-card pre { white-space: pre-wrap; word-break: break-word;
-          font-size: .85rem; background: #f6f6f8; padding: .75rem; border-radius: 8px;
-          margin: .5rem 0 1rem; max-height: 220px; overflow:auto; }
-        #guardian-card .gbtns { display:flex; gap:.5rem; justify-content:flex-end; }
-        #guardian-card button { border:none; border-radius:8px; padding:.55rem 1rem;
-          font-size:.9rem; font-weight:600; cursor:pointer; }
-        .g-primary { background:#4f46e5; color:#fff; }
-        .g-secondary { background:#e5e7eb; color:#111; }
-        .g-spinner { width:18px;height:18px;border:3px solid #ddd;border-top-color:#4f46e5;
-          border-radius:50%; animation: gspin 1s linear infinite; }
+        #guardian-overlay, #guardian-overlay * { box-sizing: border-box; margin: 0; padding: 0; }
+        #guardian-card { width: min(460px, 100%); background: #ffffff; color: #16181d;
+          border: 1px solid #e3e6eb; border-radius: 10px; overflow: hidden;
+          box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 24px 64px rgba(8,10,14,.4); }
+        @keyframes g-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+        #guardian-overlay.show #guardian-card { animation: g-in .16s ease-out; }
+        @media (prefers-reduced-motion: reduce) { #guardian-overlay.show #guardian-card { animation: none; } }
+        #guardian-card .g-accent { height: 3px; background: #b42318; }
+        #guardian-card .g-accent.g-amber { background: #b54708; }
+        #guardian-card .g-head { display: flex; align-items: center; gap: 7px; padding: 14px 20px 0; color: #5a6270; }
+        #guardian-card .g-brand { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
+        #guardian-card .g-body { padding: 13px 20px 18px; }
+        #guardian-card .g-title { font-size: 16.5px; font-weight: 650; letter-spacing: -.01em;
+          line-height: 1.3; margin-bottom: 6px; color: inherit; }
+        #guardian-card .g-text { font-size: 13.5px; line-height: 1.55; color: #3d434d; }
+        #guardian-card .g-evidence { margin-top: 12px; border: 1px solid #e3e6eb; border-radius: 7px;
+          overflow: hidden; max-height: 190px; overflow-y: auto; }
+        #guardian-card .g-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+          border-top: 1px solid #eef0f3; font-size: 12.5px; min-width: 0; }
+        #guardian-card .g-row:first-child { border-top: 0; }
+        #guardian-card .g-sev { flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: .07em;
+          text-transform: uppercase; padding: 2px 7px; border-radius: 99px;
+          background: #eef0f3; color: #5a6270; }
+        #guardian-card .g-sev-critical, #guardian-card .g-sev-high { background: #fee4e2; color: #b42318; }
+        #guardian-card .g-sev-medium { background: #fef0c7; color: #b54708; }
+        #guardian-card .g-det { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #guardian-card .g-snip { margin-left: auto; flex: none; font-family: ui-monospace, "Cascadia Mono",
+          "SF Mono", Consolas, monospace; font-size: 11.5px; color: #5a6270;
+          background: #f4f5f7; border: 1px solid #e9ebef; padding: 2px 7px; border-radius: 4px; }
+        #guardian-card .g-foot { display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+          border-top: 1px solid #e3e6eb; background: #fafbfc; }
+        #guardian-card .g-audit { font-size: 11.5px; line-height: 1.45; color: #5a6270; }
+        #guardian-card .g-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+        #guardian-card button, #guardian-card a.g-secondary { font: inherit; font-size: 13px;
+          font-weight: 600; border-radius: 7px; padding: 7px 14px; cursor: pointer;
+          text-decoration: none; white-space: nowrap; }
+        #guardian-card .g-primary { background: #16181d; color: #ffffff; border: 1px solid #16181d; }
+        #guardian-card .g-primary:hover { background: #2a2e36; }
+        #guardian-card a.g-secondary { background: transparent; color: #16181d; border: 1px solid #d4d8de; }
+        #guardian-card a.g-secondary:hover { border-color: #aab1bb; }
+        #guardian-card :focus-visible { outline: 2px solid #5a6270; outline-offset: 2px; }
+        #guardian-card .g-spinner { width: 16px; height: 16px; border: 2px solid #d4d8de;
+          border-top-color: #16181d; border-radius: 50%; flex: none;
+          animation: gspin 1s linear infinite; }
         @keyframes gspin { to { transform: rotate(360deg); } }
-        #guardian-card a { color:#4f46e5; }
+        #guardian-card .g-checking { display: flex; align-items: center; gap: 10px;
+          padding: 16px 20px; font-size: 13.5px; color: #3d434d; }
+        @media (prefers-color-scheme: dark) {
+          #guardian-card { background: #1c1f26; color: #e8eaee; border-color: #2e333c;
+            box-shadow: 0 1px 2px rgba(0,0,0,.5), 0 24px 64px rgba(0,0,0,.6); }
+          #guardian-card .g-accent { background: #e5484d; }
+          #guardian-card .g-accent.g-amber { background: #d97706; }
+          #guardian-card .g-head { color: #9ba3af; }
+          #guardian-card .g-text { color: #c3c9d2; }
+          #guardian-card .g-evidence { border-color: #2e333c; }
+          #guardian-card .g-row { border-top-color: #262b33; }
+          #guardian-card .g-sev { background: #262b33; color: #9ba3af; }
+          #guardian-card .g-sev-critical, #guardian-card .g-sev-high { background: rgba(229,72,77,.16); color: #ff8f92; }
+          #guardian-card .g-sev-medium { background: rgba(217,119,6,.16); color: #f5b45e; }
+          #guardian-card .g-snip { background: #262b33; border-color: #30353f; color: #aeb6c2; }
+          #guardian-card .g-foot { background: #181b21; border-top-color: #2e333c; }
+          #guardian-card .g-audit { color: #9ba3af; }
+          #guardian-card .g-primary { background: #e8eaee; color: #16181d; border-color: #e8eaee; }
+          #guardian-card .g-primary:hover { background: #ffffff; }
+          #guardian-card a.g-secondary { color: #e8eaee; border-color: #3a404b; }
+          #guardian-card a.g-secondary:hover { border-color: #5a6270; }
+          #guardian-card .g-spinner { border-color: #3a404b; border-top-color: #e8eaee; }
+          #guardian-card .g-checking { color: #c3c9d2; }
+          #guardian-card :focus-visible { outline-color: #9ba3af; }
+        }
       </style>
-      <div id="guardian-card"></div>`;
+      <div id="guardian-card" role="alertdialog" aria-modal="true" aria-labelledby="g-title"></div>`;
     (document.body || document.documentElement).appendChild(overlayEl);
     return overlayEl;
   }
@@ -172,14 +239,27 @@
     const el = ensureOverlay();
     const card = el.querySelector("#guardian-card");
     if (kind === "verificando") {
-      card.innerHTML = `<h2><span class="g-spinner"></span> Claude Guardian</h2><p>${html}</p>`;
+      card.innerHTML = `<div class="g-accent"></div><div class="g-checking"><span class="g-spinner"></span>${esc(html)}</div>`;
     } else {
-      card.innerHTML = html + `<div class="gbtns"><button class="g-secondary" id="g-close">Entendi</button></div>`;
+      card.innerHTML = html;
       const close = card.querySelector("#g-close");
-      if (close) close.addEventListener("click", hideOverlay);
+      if (close) {
+        close.addEventListener("click", hideOverlay);
+        try {
+          close.focus({ preventScroll: true });
+        } catch {
+          /* ignore */
+        }
+      }
     }
     el.classList.add("show");
   }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlayEl && overlayEl.classList.contains("show")) {
+      hideOverlay();
+    }
+  });
 
   function hideOverlay() {
     if (overlayEl) overlayEl.classList.remove("show");
@@ -188,27 +268,67 @@
   function findingsTable(findings) {
     if (!findings || !findings.length) return "";
     const rows = findings
-      .map((f) => `<div>• <b>${esc(f.label)}</b> <code>${esc(f.snippet)}</code></div>`)
+      .map((f) => {
+        const sev = String(f.severity || "").toLowerCase();
+        const label = SEV_LABEL[sev] || "Info";
+        return `<div class="g-row"><span class="g-sev g-sev-${esc(sev)}">${esc(label)}</span><span class="g-det">${esc(f.label)}</span><code class="g-snip">${esc(f.snippet)}</code></div>`;
+      })
       .join("");
-    return `<pre>${rows}</pre>`;
+    return `<div class="g-evidence">${rows}</div>`;
+  }
+
+  function renderCard(opts) {
+    const secondary = opts.linkUrl
+      ? `<a class="g-secondary" href="${esc(opts.linkUrl)}" target="_blank" rel="noopener">${esc(opts.linkLabel)}</a>`
+      : "";
+    return `
+      <div class="g-accent${opts.amber ? " g-amber" : ""}"></div>
+      <div class="g-head">${SHIELD_SVG}<span class="g-brand">Claude Guardian &middot; Preven&ccedil;&atilde;o de perda de dados</span></div>
+      <div class="g-body">
+        <h2 class="g-title" id="g-title">${esc(opts.title)}</h2>
+        <p class="g-text">${esc(opts.text)}</p>
+        ${findingsTable(opts.findings)}
+      </div>
+      <div class="g-foot">
+        <span class="g-audit">Evento registrado no log de auditoria da organiza&ccedil;&atilde;o.</span>
+        <span class="g-actions">${secondary}<button class="g-primary" id="g-close">${esc(opts.closeLabel)}</button></span>
+      </div>`;
   }
 
   function formatBlock(r) {
-    const link = r.approvalUrl
-      ? `<p>Para solicitar liberação: <a href="${esc(r.approvalUrl)}" target="_blank">abrir página</a></p>`
-      : "";
-    return `<h2>🛑 Envio bloqueado</h2><p>${esc(r.reason || "Dado sensível detectado.")}</p>${findingsTable(r.findings)}${link}`;
+    const hasFindings = r.findings && r.findings.length;
+    return renderCard({
+      title: "Envio bloqueado",
+      text: hasFindings
+        ? "A mensagem contém dados sensíveis e foi retida nesta máquina. Nada foi enviado ao provedor de IA."
+        : r.reason || "A mensagem foi retida pela política de segurança de dados.",
+      findings: r.findings,
+      linkUrl: r.approvalUrl,
+      linkLabel: "Solicitar exceção",
+      closeLabel: "Entendi",
+    });
   }
 
   function formatApproval(r) {
-    const link = r.approvalUrl
-      ? `<p><a href="${esc(r.approvalUrl)}" target="_blank">Solicitar liberação</a></p>`
-      : "";
-    return `<h2>⏳ Aprovação necessária</h2><p>${esc(r.reason || "")}</p>${findingsTable(r.findings)}${link}`;
+    return renderCard({
+      amber: true,
+      title: "Aprovação necessária",
+      text: "O envio foi retido e aguarda liberação do time de segurança. Nada foi enviado ao provedor de IA.",
+      findings: r.findings,
+      linkUrl: r.approvalUrl,
+      linkLabel: "Acompanhar solicitação",
+      closeLabel: "Fechar",
+    });
   }
 
   function esc(s) {
+    // Escapa também aspas: valores são interpolados dentro de atributos
+    // (href do link de aprovação, classe do chip de severidade).
     return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 })();
