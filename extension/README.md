@@ -70,14 +70,22 @@ usuário não escolhe nem consegue alterar:
 
 ## Como funciona
 
-- **Camada de rede (`injected.js`)**: intercepta `fetch` **e `XMLHttpRequest`**
-  de envio de mensagem e segura até ter veredito. É o enforcement real. O
-  conhecimento por site (qual request é "envio" e como extrair o texto) vive no
-  registry `ADAPTERS` — um adapter por provider. Adicionar um site = um adapter
-  novo + uma entrada de host nos dois manifests.
+- **Camada de rede (`injected.js`)**: content script em **`world: "MAIN"`**
+  (contexto da página) que intercepta `fetch` **e `XMLHttpRequest`** de envio
+  de mensagem e segura até ter veredito. É o enforcement real. O conhecimento
+  por site (qual request é "envio" e como extrair o texto) vive no registry
+  `ADAPTERS` — um adapter por provider. Adicionar um site = um adapter novo +
+  uma entrada de host nos dois manifests.
 - **Camada de UI (`content.js`)**: overlay de feedback e interceptação de
   uploads (drag/drop, paste, file input) — agnóstica de site.
 - **Background (`background.js`)**: único contexto que fala com `localhost`.
+- **Anti-spoofing**: `content.js` e `injected.js` trocam mensagens autenticadas
+  por um **nonce** gerado por `crypto.getRandomValues` e entregue via atributo
+  DOM lido+removido em `document_start` — antes de qualquer script do site
+  rodar. Scripts da página não conseguem forjar um `scan-result: allow`; sem
+  nonce válido, o scan expira e bloqueia (fail-closed).
+  > Requisito: `world: "MAIN"` em content script exige Chrome/Edge 111+ e
+  > Firefox 128+.
 
 ## Limitações conhecidas
 

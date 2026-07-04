@@ -4,23 +4,23 @@
 (() => {
   const api = globalThis.browser ?? globalThis.chrome;
 
-  // ── Inject the page-context fetch hook as early as possible ───────────────
-  function inject() {
-    try {
-      const s = document.createElement("script");
-      s.src = api.runtime.getURL("injected.js");
-      s.onload = () => s.remove();
-      (document.head || document.documentElement).appendChild(s);
-    } catch (e) {
-      console.error("[guardian] falha ao injetar enforcement layer", e);
-    }
-  }
-  inject();
+  // ── Handshake de nonce com o enforcement layer (injected.js, world MAIN) ──
+  // Ambos são content scripts document_start: rodam antes de QUALQUER script
+  // da página. O nonce é gravado no DOM aqui e lido+removido pelo injected.js
+  // antes de existir código do site — a página nunca o observa. Sem ele,
+  // mensagens scan-request/scan-result são ignoradas, fechando o bypass por
+  // postMessage forjado (um "allow" falso vindo da própria página).
+  const nonceBytes = new Uint8Array(16);
+  crypto.getRandomValues(nonceBytes);
+  const NONCE = Array.from(nonceBytes, (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+  document.documentElement.dataset.guardianNonce = NONCE;
 
   // ── Bridge: injected (page) → background (extension) → injected ───────────
   window.addEventListener("message", async (e) => {
     const d = e.data;
-    if (!d || d.__guardian !== "scan-request") return;
+    if (!d || d.__guardian !== "scan-request" || d.nonce !== NONCE) return;
 
     // Scan runs silently — overlay only appears on block/approval below.
     let result;
@@ -38,7 +38,10 @@
       hideOverlay();
     }
 
-    window.postMessage({ __guardian: "scan-result", id: d.id, result }, "*");
+    window.postMessage(
+      { __guardian: "scan-result", id: d.id, nonce: NONCE, result },
+      "*",
+    );
   });
 
   // ── Upload interception (UI layer) ────────────────────────────────────────

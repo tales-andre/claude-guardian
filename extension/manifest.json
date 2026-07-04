@@ -34,11 +34,8 @@
       "js": ["config.js", "content.js"],
       "run_at": "document_start",
       "all_frames": false
-    }
-  ],
-  "web_accessible_resources": [
+    },
     {
-      "resources": ["injected.js", "config.js"],
       "matches": [
         "https://claude.ai/*",
         "https://chatgpt.com/*",
@@ -48,7 +45,11 @@
         "https://chat.mistral.ai/*",
         "https://adapta.one/*",
         "https://app.adapta.one/*"
-      ]
+      ],
+      "js": ["injected.js"],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "MAIN"
     }
   ],
   "options_ui": {

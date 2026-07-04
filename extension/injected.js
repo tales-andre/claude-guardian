@@ -10,6 +10,13 @@
 // the manifests. Fail-closed: if a request is recognized as a send but the
 // text cannot be extracted, the send is blocked rather than leaked.
 (() => {
+  // Nonce do handshake com o content script (ver content.js): lido e removido
+  // do DOM antes de qualquer script da página rodar (ambos são content scripts
+  // document_start; este roda em world MAIN via manifest). Se o nonce faltar,
+  // nada é liberado: os scans expiram no timeout e bloqueiam (fail-closed).
+  const NONCE = document.documentElement.dataset.guardianNonce || "";
+  delete document.documentElement.dataset.guardianNonce;
+
   const pending = new Map();
   let seq = 0;
 
@@ -193,7 +200,10 @@
     return new Promise((resolve) => {
       const id = `gx_${++seq}`;
       pending.set(id, resolve);
-      window.postMessage({ __guardian: "scan-request", id, payload }, "*");
+      window.postMessage(
+        { __guardian: "scan-request", id, nonce: NONCE, payload },
+        "*",
+      );
       // Hard fail-closed safety net if no reply arrives.
       setTimeout(() => {
         if (pending.has(id)) {
@@ -206,7 +216,13 @@
 
   window.addEventListener("message", (e) => {
     const d = e.data;
-    if (!d || d.__guardian !== "scan-result" || !pending.has(d.id)) return;
+    if (
+      !d ||
+      d.__guardian !== "scan-result" ||
+      d.nonce !== NONCE ||
+      !pending.has(d.id)
+    )
+      return;
     const resolve = pending.get(d.id);
     pending.delete(d.id);
     resolve(d.result);
