@@ -166,6 +166,39 @@ precisando do daemon Windows. **Valide o encaminhamento de localhost no piloto**
 (há configurações de rede WSL, como `networkingMode=mirrored`, que mudam o
 comportamento).
 
+### 2.3 Extensão de navegador via MDM
+
+O control-plane compila também as políticas que instalam e configuram a
+extensão DLP (`extension/`) à força nos browsers gerenciados:
+
+```bash
+node --experimental-strip-types src/cli/index.ts emit-managed-settings \
+  --extension-id <id-da-web-store> \
+  --firefox-id claude-guardian@junto.local \
+  --firefox-xpi https://mdm.minhaempresa.com/claude-guardian.xpi \
+  --guardian-token <dashboardToken-do-daemon>
+```
+
+Saídas em `managed-settings-out/browser/` e destino de cada uma:
+
+| Artefato | Distribuição |
+|---|---|
+| `chrome-policy.linux.json` | `/etc/opt/chrome/policies/managed/` |
+| `edge-policy.linux.json` | `/etc/opt/microsoft/msedge/policies/managed/` |
+| `browser-policy.windows.reg` | Intune/GPO (Chrome + Edge, forcelist + managed storage) |
+| `browser-policy.macos.mobileconfig` | Jamf/Kandji |
+| `firefox-policies.json` | `distribution/policies.json` do Firefox |
+
+As políticas incluem `ExtensionInstallForcelist` (usuário não desinstala) e o
+managed storage (`3rdparty`) com endpoint/token do daemon local — a options
+page da extensão vira somente-leitura.
+
+**Publicação da extensão (decisão de rollout):** o force-install exige a
+extensão publicada na Chrome Web Store (pode ser *unlisted*, visível só por
+link) **ou** self-hosted com um `update_url` próprio (`--extension-update-url`).
+Web Store unlisted é o caminho de menor atrito; self-hosting dá controle total
+mas exige assinar/servir o CRX e manter o endpoint de update.
+
 ## 3. Fluxo de exceção no modo enterprise
 
 1. Dev é bloqueado e recebe o link `https://guardian.minhaempresa.com/request-approval/<incidente>`

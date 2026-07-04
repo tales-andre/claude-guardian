@@ -57,6 +57,20 @@ program
   .option("--allow-mcp <list>", "Comma-separated allowed MCP servers")
   .option("--deny-mcp <list>", "Comma-separated denied MCP servers")
   .option("--deny-read <list>", "Comma-separated paths to deny reading")
+  .option(
+    "--extension-id <id>",
+    "Chrome/Edge extension ID (enables browser policy artifacts)",
+  )
+  .option("--extension-update-url <url>", "CRX update URL (default: Web Store)")
+  .option("--edge-extension-id <id>", "Edge-specific extension ID")
+  .option("--edge-update-url <url>", "Edge-specific CRX update URL")
+  .option("--firefox-id <id>", "Firefox extension ID (gecko id)")
+  .option("--firefox-xpi <url>", "XPI URL for Firefox force install")
+  .option(
+    "--guardian-endpoint <url>",
+    "Local daemon endpoint pushed to the extension (default http://127.0.0.1:7734)",
+  )
+  .option("--guardian-token <token>", "dashboardToken pushed to the extension")
   .action(cmdEmitManagedSettings);
 
 program
