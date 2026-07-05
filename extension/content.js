@@ -65,6 +65,11 @@
         // Toast não-bloqueante só avisa o usuário do que foi trocado.
         hideOverlay();
         showToast(formatSubstitute(result));
+        // A rede levou o fictício, mas alguns sites (Gemini) renderizam a bolha
+        // do usuário a partir do texto digitado (real). Espelha a troca na TELA
+        // para o histórico exibir o mesmo que foi enviado. No-op na claude.ai
+        // (lá o real já nem aparece no DOM).
+        maskDomValues(result.substitutions);
       } else {
         // Neste site o injected.js não sabe reescrever in-place, então o envio
         // é BLOQUEADO (fail-closed). Mostra o overlay de bloqueio honesto.
@@ -397,6 +402,67 @@
   function hideToast() {
     if (toastEl) toastEl.classList.remove("show");
     clearTimeout(toastTimer);
+  }
+
+  // ── Espelha a substituição na TELA (real → fictício) ──────────────────────
+  // A rede já leva o fictício; isto só corrige a EXIBIÇÃO em sites que renderizam
+  // a bolha do usuário a partir do texto digitado (Gemini). Genérico e site-
+  // agnóstico: troca em text nodes visíveis e observa re-renders por uma janela
+  // curta (a bolha aparece de forma assíncrona). Nunca toca campos editáveis.
+  const DOM_SKIP = new Set([
+    "SCRIPT",
+    "STYLE",
+    "TEXTAREA",
+    "NOSCRIPT",
+    "INPUT",
+  ]);
+  function maskTextNode(node, pairs) {
+    const p = node.parentNode;
+    if (!p || DOM_SKIP.has(p.nodeName) || p.isContentEditable) return;
+    const t = node.nodeValue;
+    if (!t) return;
+    let out = t;
+    for (const [raw, fake] of pairs) if (out.includes(raw)) out = out.split(raw).join(fake);
+    if (out !== t) node.nodeValue = out;
+  }
+  function maskSubtree(root, pairs) {
+    if (root.nodeType === 3) return maskTextNode(root, pairs);
+    if (root.nodeType !== 1) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n = walker.nextNode();
+    while (n) {
+      maskTextNode(n, pairs);
+      n = walker.nextNode();
+    }
+  }
+  function maskDomValues(subs) {
+    const pairs = (Array.isArray(subs) ? subs : [])
+      .filter((s) => s && s.raw)
+      .map((s) => [s.raw, s.fake]);
+    if (!pairs.length) return;
+    try {
+      maskSubtree(document.body, pairs);
+    } catch {
+      /* ignore */
+    }
+    let obs;
+    try {
+      obs = new MutationObserver((muts) => {
+        for (const m of muts) {
+          if (m.type === "characterData") maskTextNode(m.target, pairs);
+          for (const added of m.addedNodes) maskSubtree(added, pairs);
+        }
+      });
+      obs.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+      // Bolha do usuário costuma aparecer em <1s; 5s cobre re-renders do app.
+      setTimeout(() => obs.disconnect(), 5000);
+    } catch {
+      if (obs) obs.disconnect();
+    }
   }
 
   function formatSubstitute(r) {
