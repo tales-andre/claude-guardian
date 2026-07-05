@@ -16,7 +16,7 @@ import { appendAuditEntry } from "./audit.ts";
 import { dashboardBaseUrl, reportToCentral } from "./central.ts";
 import { recordIncident } from "./incident.ts";
 import { evaluatePolicy, findApprovalTtl } from "./policy.ts";
-import { substituteText } from "./substitute.ts";
+import { generateFake, substituteText } from "./substitute.ts";
 
 // ── Scan para a extensão de navegador (POST /api/scan-web) ───────────────────
 // O scan roda 100% na máquina (daemon local): o texto do prompt/upload nunca
@@ -59,8 +59,30 @@ export interface WebScanResponse {
   redactedText?: string;
   /** Texto reescrito com dados fictícios (ação substitute). */
   substitutedText?: string;
+  /**
+   * Mapa real→fictício (ação substitute). A extensão aplica cada par ao corpo
+   * do envio no formato do site (JSON do claude, f.req do Gemini, …). Os valores
+   * reais não saem da máquina — a extensão já os tinha (leu do corpo local).
+   */
+  substitutions?: Array<{ raw: string; fake: string }>;
   approvalUrl?: string;
   reason: string;
+}
+
+// Deriva o mapa real→fictício dos findings de texto, mais longos primeiro
+// (evita corromper um valor que seja substring de outro), sem duplicatas.
+function buildSubstitutions(
+  findings: DetectorFinding[],
+  salt: string,
+): Array<{ raw: string; fake: string }> {
+  const seen = new Set<string>();
+  return [...findings]
+    .filter((f) => f.rawValue && !seen.has(f.rawValue) && seen.add(f.rawValue))
+    .sort((a, b) => b.rawValue.length - a.rawValue.length)
+    .map((f) => ({
+      raw: f.rawValue,
+      fake: generateFake(f.dataType, f.rawValue, salt),
+    }));
 }
 
 const ACTION_PRIORITY: Record<PolicyAction, number> = {
@@ -216,6 +238,7 @@ export function scanWeb(
       action: "substitute",
       findings: allFindings.map(toWebFinding),
       substitutedText,
+      substitutions: buildSubstitutions(textFindings, config.substitutionSalt),
       reason:
         "Dado sensível substituído por valores fictícios. Confirme o envio.",
     };

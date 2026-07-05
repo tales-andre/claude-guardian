@@ -1,9 +1,11 @@
-// Regressão: a ação `substitute` só pode reescrever o corpo do envio onde o
-// adapter sabe fazê-lo in-place (injectRedaction — hoje só claude.ai). Em sites
-// sem essa capacidade (ChatGPT/Gemini/…), substitute NÃO pode deixar o dado real
-// sair: precisa degradar para BLOCK (fail-closed). Roda o injected.js real num
-// vm, como em extension-upload.test.ts. Usa placeholders (sem PII real): o
-// verdict é mockado, então o conteúdo do texto é irrelevante para o teste.
+// Regressão da ação `substitute` no injected.js (rodado num vm, como
+// extension-upload.test.ts). Contrato: o daemon devolve o mapa real→fictício
+// (verdict.substitutions); cada adapter aplica no seu formato via
+// injectSubstitution, e decide() AUTO-VERIFICA (extractText do corpo novo não
+// pode conter nenhum valor real) — senão FAIL-CLOSED (block).
+//   • claude.ai e gemini.google.com sabem reescrever → substituem.
+//   • sites sem injectSubstitution (ex.: chatgpt.com) → bloqueiam.
+// Usa placeholders (sem PII real): o verdict é mockado.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
@@ -80,41 +82,60 @@ function setupInjected(verdict: Verdict, hostname: string) {
   return { doFetch, fetchCalls };
 }
 
-// Placeholders sem PII: o valor real que o site "digitou" e o fictício que o
-// daemon (mockado) devolveria em substitutedText.
+// Placeholders sem PII: o valor real "digitado" e o fictício que o daemon
+// (mockado) devolveria no mapa substitutions.
 const REAL = "SENSITIVE-PLACEHOLDER-1111";
 const FAKE = "FICTION-PLACEHOLDER-2222";
 const substituteVerdict = () => ({
   action: "substitute",
-  substitutedText: `dado ${FAKE}`,
+  substitutions: [{ raw: REAL, fake: FAKE }],
 });
 
-describe("injected.js — substitute é fail-closed sem injectRedaction", () => {
-  it("claude.ai: reescreve o corpo com o fictício e NÃO bloqueia", async () => {
+function sentBody(fetchCalls: Array<{ init: unknown }>): string {
+  return String((fetchCalls[0]?.init as { body: unknown }).body ?? "");
+}
+
+describe("injected.js — ação substitute", () => {
+  it("claude.ai: reescreve o prompt com o fictício (não bloqueia)", async () => {
     const { doFetch, fetchCalls } = setupInjected(substituteVerdict, "claude.ai");
     await doFetch("https://claude.ai/api/o/chat_conversations/c/completion", {
       method: "POST",
       body: JSON.stringify({ prompt: `dado ${REAL}` }),
     });
     expect(fetchCalls).toHaveLength(1);
-    const sent = JSON.parse((fetchCalls[0]?.init as { body: string }).body) as {
-      prompt: string;
-    };
+    const sent = JSON.parse(sentBody(fetchCalls)) as { prompt: string };
     expect(sent.prompt).toBe(`dado ${FAKE}`);
     expect(sent.prompt).not.toContain(REAL);
   });
 
-  it("gemini: sem injectRedaction, BLOQUEIA em vez de vazar o dado real", async () => {
+  it("gemini: reescreve o f.req com o fictício (não bloqueia)", async () => {
     const { doFetch, fetchCalls } = setupInjected(
       substituteVerdict,
       "gemini.google.com",
     );
     const body = `f.req=${encodeURIComponent(JSON.stringify([[`dado ${REAL}`]]))}`;
+    await doFetch(
+      "https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?rpcids=x",
+      { method: "POST", body },
+    );
+    expect(fetchCalls).toHaveLength(1);
+    const out = sentBody(fetchCalls);
+    expect(out).toContain(FAKE);
+    expect(out).not.toContain(REAL);
+  });
+
+  it("chatgpt: sem injectSubstitution, BLOQUEIA em vez de vazar (fail-closed)", async () => {
+    const { doFetch, fetchCalls } = setupInjected(
+      substituteVerdict,
+      "chatgpt.com",
+    );
     await expect(
-      doFetch(
-        "https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?rpcids=x",
-        { method: "POST", body },
-      ),
+      doFetch("https://chatgpt.com/backend-api/conversation", {
+        method: "POST",
+        body: JSON.stringify({
+          messages: [{ content: { parts: [`dado ${REAL}`] } }],
+        }),
+      }),
     ).rejects.toThrow(/bloqueado/i);
     expect(fetchCalls).toHaveLength(0);
   });

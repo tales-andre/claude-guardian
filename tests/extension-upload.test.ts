@@ -224,7 +224,7 @@ describe("injected.js — anexo inline no /completion do claude.ai", () => {
   const substituteVerdict: Verdict = (payload) => {
     const text = payload.text ?? "";
     return text.includes(CPF)
-      ? { action: "substitute", substitutedText: text.split(CPF).join(FAKE) }
+      ? { action: "substitute", substitutions: [{ raw: CPF, fake: FAKE }] }
       : { action: "allow", findings: [] };
   };
 

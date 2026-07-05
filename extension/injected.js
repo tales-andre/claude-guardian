@@ -57,6 +57,17 @@
     }
   }
 
+  // Aplica o mapa real→fictício a uma string (valores mais longos já vêm
+  // primeiro do daemon). Usado pelos injectSubstitution dos adapters.
+  function applySubs(text, subs) {
+    if (typeof text !== "string" || !Array.isArray(subs)) return text;
+    let out = text;
+    for (const s of subs) {
+      if (s && s.raw) out = out.split(s.raw).join(s.fake);
+    }
+    return out;
+  }
+
   // Generic "messages[].content" extractor shared by several providers.
   function textFromMessages(json) {
     if (!json) return "";
@@ -120,6 +131,21 @@
       const json = parseJson(body);
       if (!json) return null;
       json.prompt = redactedText;
+      return JSON.stringify(json);
+    },
+    // Substitui in-place cada valor real pelo fictício, só nos campos de texto
+    // (prompt + conteúdo de anexo). Ao contrário de injectRedaction (que troca o
+    // prompt inteiro), preserva o resto do corpo.
+    injectSubstitution(body, subs) {
+      const json = parseJson(body);
+      if (!json) return null;
+      if (typeof json.prompt === "string") json.prompt = applySubs(json.prompt, subs);
+      if (Array.isArray(json.attachments)) {
+        for (const a of json.attachments) {
+          if (a && typeof a.extracted_content === "string")
+            a.extracted_content = applySubs(a.extracted_content, subs);
+        }
+      }
       return JSON.stringify(json);
     },
   };
@@ -187,6 +213,22 @@
       // Nunca "" para um corpo não-vazio: no pior caso escaneia o blob inteiro
       // (segredos alfanuméricos aparecem literalmente nele).
       return decoded.join("\n") || raw;
+    },
+    // Reescreve o prompt no envelope f.req: os valores reais aparecem literais
+    // nas strings JSON internas (já decodificadas), então aplica o mapa ali e
+    // re-encoda. A auto-verificação de decide() (extractText no corpo novo)
+    // bloqueia caso algum valor sobreviva.
+    injectSubstitution(body, subs) {
+      if (typeof body !== "string" || !body) return null;
+      let params;
+      try {
+        params = new URLSearchParams(body);
+      } catch {
+        return null;
+      }
+      if (!params.has("f.req")) return null;
+      params.set("f.req", applySubs(params.get("f.req") || "", subs));
+      return params.toString();
     },
   };
 
@@ -418,24 +460,35 @@
     if (verdict.action === "block" || verdict.action === "require-approval") {
       return { block: true };
     }
-    // redact e substitute reescrevem o corpo do envio antes de sair: redact
-    // troca por [REDACTED], substitute troca por dados fictícios plausíveis.
-    // Ambos reusam injectRedaction (reescreve o prompt no corpo do request).
-    const rewriteText =
-      verdict.action === "redact"
-        ? verdict.redactedText
-        : verdict.action === "substitute"
-          ? verdict.substitutedText
-          : null;
-    if (rewriteText !== null) {
-      // A ação exige reescrever o corpo. Só é SEGURA se o adapter deste site
-      // sabe reescrever in-place (injectRedaction) e o resultado é válido.
-      // Caso contrário → FAIL-CLOSED (bloqueia): jamais deixar o dado REAL sair
-      // com o daemon achando que foi mascarado/substituído. Hoje apenas a
-      // claude.ai tem injectRedaction; nos demais sites redact/substitute
-      // degradam para block até o adapter ganhar reescrita validada.
-      if (typeof rewriteText === "string" && adapter.injectRedaction) {
-        const newBody = adapter.injectRedaction(body, rewriteText);
+    // substitute: troca cada valor real pelo fictício, in-place, no formato do
+    // site (adapter.injectSubstitution). Só é seguro se o adapter souber fazê-lo
+    // E a auto-verificação confirmar que NENHUM valor real sobreviveu no corpo
+    // novo. Qualquer falha → FAIL-CLOSED (bloqueia): jamais deixar o dado real
+    // sair achando que foi substituído.
+    if (verdict.action === "substitute") {
+      const subs = Array.isArray(verdict.substitutions)
+        ? verdict.substitutions
+        : null;
+      if (subs && adapter.injectSubstitution) {
+        const newBody = adapter.injectSubstitution(body, subs);
+        if (typeof newBody === "string") {
+          let check = "";
+          try {
+            check = adapter.extractText(newBody) || "";
+          } catch {
+            check = newBody;
+          }
+          const leaked = subs.some((s) => s && s.raw && check.includes(s.raw));
+          if (!leaked) return { block: false, redactedBody: newBody };
+        }
+      }
+      return { block: true };
+    }
+    // redact: troca o valor por [REDACTED] via injectRedaction. Fail-closed se o
+    // site não souber reescrever.
+    if (verdict.action === "redact") {
+      if (typeof verdict.redactedText === "string" && adapter.injectRedaction) {
+        const newBody = adapter.injectRedaction(body, verdict.redactedText);
         if (typeof newBody === "string")
           return { block: false, redactedBody: newBody };
       }

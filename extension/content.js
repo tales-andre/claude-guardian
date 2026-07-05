@@ -8,8 +8,9 @@
   // (têm adapter.injectRedaction). Só nesses a ação `substitute` de fato troca
   // o dado por fictício; nos demais ela degrada para BLOCK (fail-closed), então
   // a UI mostra o overlay de bloqueio em vez do toast de "substituído".
-  // Manter em sincronia com os adapters que definem injectRedaction (injected.js).
-  const REWRITE_CAPABLE = /(^|\.)claude\.ai$/i;
+  // Manter em sincronia com os adapters que definem injectSubstitution
+  // (injected.js). Nos demais sites, substitute degrada para BLOCK (fail-closed).
+  const REWRITE_CAPABLE = /(^|\.)claude\.ai$|(^|\.)gemini\.google\.com$/i;
 
   // ── Handshake de nonce com o enforcement layer (injected.js, world MAIN) ──
   // Ambos são content scripts document_start: rodam antes de QUALQUER script
