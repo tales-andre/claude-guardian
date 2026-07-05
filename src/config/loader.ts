@@ -44,6 +44,8 @@ const configSchema = z.object({
   allowlist: z.array(allowlistEntrySchema).default([]),
   databaseUrl: z.string().default(""),
   agentApiKey: z.string().default(""),
+  enrollmentSecret: z.string().default(""),
+  allowLegacyAgentKey: z.boolean().default(true),
   centralUrl: z.string().default(""),
   centralApiKey: z.string().default(""),
   substitutionSalt: z.string().default(""),
@@ -64,6 +66,12 @@ function applyEnvOverrides(config: Config): Config {
     databaseUrl:
       env["GUARDIAN_DATABASE_URL"] ?? env["DATABASE_URL"] ?? config.databaseUrl,
     agentApiKey: env["GUARDIAN_AGENT_KEY"] ?? config.agentApiKey,
+    enrollmentSecret:
+      env["GUARDIAN_ENROLLMENT_SECRET"] ?? config.enrollmentSecret,
+    allowLegacyAgentKey:
+      env["GUARDIAN_ALLOW_LEGACY_AGENT_KEY"] != null
+        ? env["GUARDIAN_ALLOW_LEGACY_AGENT_KEY"] === "true"
+        : config.allowLegacyAgentKey,
     centralUrl: env["GUARDIAN_CENTRAL_URL"] ?? config.centralUrl,
     centralApiKey: env["GUARDIAN_CENTRAL_KEY"] ?? config.centralApiKey,
     substitutionSalt:

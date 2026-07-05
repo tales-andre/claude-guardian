@@ -1,5 +1,6 @@
 import type {
   AgentIngestPayload,
+  AgentKeyRow,
   Approval,
   ApprovalStatus,
   AuditEntry,
@@ -101,6 +102,17 @@ export interface GuardianStore {
   // Fleet (heartbeats de máquina)
   upsertMachine(payload: MachineHeartbeatPayload): Promise<void>;
   listMachines(): Promise<MachineRow[]>;
+
+  // Agent keys (enrollment por máquina — só o sha256 da chave é armazenado)
+  createAgentKey(row: {
+    id: string;
+    machineId: string;
+    keyHash: string;
+    createdAt: string;
+  }): Promise<void>;
+  findAgentKeyByHash(keyHash: string): Promise<AgentKeyRow | null>;
+  revokeAgentKey(id: string): Promise<boolean>;
+  listAgentKeys(): Promise<AgentKeyRow[]>;
 }
 
 export async function createStore(config: Config): Promise<GuardianStore> {

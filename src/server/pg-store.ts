@@ -3,6 +3,7 @@ import pg from "pg";
 import { generateToken } from "../lib/approval.ts";
 import type {
   AgentIngestPayload,
+  AgentKeyRow,
   Approval,
   ApprovalStatus,
   AuditEntry,
@@ -95,6 +96,16 @@ CREATE TABLE IF NOT EXISTS custom_detectors (
   created_at    TEXT NOT NULL,
   examples_json TEXT NOT NULL DEFAULT '[]'
 );
+
+CREATE TABLE IF NOT EXISTS agent_keys (
+  id         TEXT PRIMARY KEY,
+  machine_id TEXT NOT NULL,
+  key_hash   TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_keys_hash ON agent_keys(key_hash);
 
 CREATE TABLE IF NOT EXISTS machines (
   hostname            TEXT PRIMARY KEY,
@@ -549,4 +560,49 @@ export class PgStore implements GuardianStore {
       };
     });
   }
+
+  // ── Agent keys ──────────────────────────────────────────────────────────────
+  async createAgentKey(row: {
+    id: string;
+    machineId: string;
+    keyHash: string;
+    createdAt: string;
+  }): Promise<void> {
+    await this.pool.query(
+      "INSERT INTO agent_keys(id, machine_id, key_hash, created_at) VALUES($1, $2, $3, $4)",
+      [row.id, row.machineId, row.keyHash, row.createdAt],
+    );
+  }
+
+  async findAgentKeyByHash(keyHash: string): Promise<AgentKeyRow | null> {
+    const { rows } = await this.pool.query(
+      "SELECT * FROM agent_keys WHERE key_hash = $1",
+      [keyHash],
+    );
+    return rows[0] ? rowToAgentKey(rows[0]) : null;
+  }
+
+  async revokeAgentKey(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      "UPDATE agent_keys SET revoked_at = $1 WHERE id = $2 AND revoked_at IS NULL",
+      [new Date().toISOString(), id],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async listAgentKeys(): Promise<AgentKeyRow[]> {
+    const { rows } = await this.pool.query(
+      "SELECT * FROM agent_keys ORDER BY created_at DESC",
+    );
+    return (rows as Record<string, unknown>[]).map(rowToAgentKey);
+  }
+}
+
+function rowToAgentKey(row: Record<string, unknown>): AgentKeyRow {
+  return {
+    id: String(row["id"]),
+    machineId: String(row["machine_id"]),
+    createdAt: String(row["created_at"]),
+    revokedAt: row["revoked_at"] != null ? String(row["revoked_at"]) : null,
+  };
 }

@@ -35,6 +35,8 @@ export const DEFAULT_CONFIG: Config = {
   engineTimeoutMs: 500,
   databaseUrl: "",
   agentApiKey: "",
+  enrollmentSecret: "",
+  allowLegacyAgentKey: true,
   centralUrl: "",
   centralApiKey: "",
   substitutionSalt: "",

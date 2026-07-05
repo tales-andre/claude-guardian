@@ -13,6 +13,7 @@ import { appendAuditEntry, verifyAuditChain } from "../lib/audit.ts";
 import { getIncidentById, listIncidents } from "../lib/incident.ts";
 import type {
   AgentIngestPayload,
+  AgentKeyRow,
   Approval,
   ApprovalStatus,
   AuditEntry,
@@ -318,6 +319,53 @@ export class SqliteStore implements GuardianStore {
       .all() as Record<string, unknown>[];
     return Promise.resolve(rows.map(rowToMachine));
   }
+
+  // ── Agent keys ──────────────────────────────────────────────────────────────
+  createAgentKey(row: {
+    id: string;
+    machineId: string;
+    keyHash: string;
+    createdAt: string;
+  }): Promise<void> {
+    this.db
+      .prepare(
+        "INSERT INTO agent_keys(id, machine_id, key_hash, created_at) VALUES(?, ?, ?, ?)",
+      )
+      .run(row.id, row.machineId, row.keyHash, row.createdAt);
+    return Promise.resolve();
+  }
+
+  findAgentKeyByHash(keyHash: string): Promise<AgentKeyRow | null> {
+    const row = this.db
+      .prepare("SELECT * FROM agent_keys WHERE key_hash = ?")
+      .get(keyHash) as Record<string, unknown> | undefined;
+    return Promise.resolve(row ? rowToAgentKey(row) : null);
+  }
+
+  revokeAgentKey(id: string): Promise<boolean> {
+    const result = this.db
+      .prepare(
+        "UPDATE agent_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+      )
+      .run(new Date().toISOString(), id);
+    return Promise.resolve(result.changes > 0);
+  }
+
+  listAgentKeys(): Promise<AgentKeyRow[]> {
+    const rows = this.db
+      .prepare("SELECT * FROM agent_keys ORDER BY created_at DESC")
+      .all() as Record<string, unknown>[];
+    return Promise.resolve(rows.map(rowToAgentKey));
+  }
+}
+
+function rowToAgentKey(row: Record<string, unknown>): AgentKeyRow {
+  return {
+    id: String(row["id"]),
+    machineId: String(row["machine_id"]),
+    createdAt: String(row["created_at"]),
+    revokedAt: row["revoked_at"] != null ? String(row["revoked_at"]) : null,
+  };
 }
 
 function rowToMachine(row: Record<string, unknown>): MachineRow {

@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,10 @@ import { createStore } from "./store.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
 export async function buildServer(config: Config): Promise<FastifyInstance> {
   const fastify = Fastify({ logger: false });
   // SQLite local (comportamento original) ou Postgres quando databaseUrl está
@@ -35,21 +40,31 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
   // ── Auth middleware ────────────────────────────────────────────────────────
   fastify.addHook(
     "onRequest",
-    (req: FastifyRequest, reply: FastifyReply, done) => {
+    async (req: FastifyRequest, reply: FastifyReply) => {
       const url = req.url.split("?")[0] ?? req.url;
 
-      // Endpoints de agente: autenticados exclusivamente pela chave de agente.
-      // Fail-closed: sem agentApiKey configurada, nenhuma máquina ingere dados.
+      // Enrollment: autenticado pelo segredo de enrollment no próprio handler.
+      if (url === "/api/agent/enroll") return;
+
+      // Endpoints de agente: chave por máquina (enrollment) ou, durante a
+      // migração, a agentApiKey compartilhada legada (allowLegacyAgentKey).
+      // Fail-closed: sem chave válida, nenhuma máquina ingere dados.
       if (url.startsWith("/api/agent/")) {
         const agentKey = req.headers["x-guardian-agent-key"] as
           | string
           | undefined;
-        if (config.agentApiKey && agentKey === config.agentApiKey) {
-          done();
-          return;
+        if (agentKey) {
+          const row = await store.findAgentKeyByHash(sha256(agentKey));
+          if (row && !row.revokedAt) return;
+          if (
+            config.allowLegacyAgentKey &&
+            config.agentApiKey &&
+            agentKey === config.agentApiKey
+          ) {
+            return;
+          }
         }
-        reply.status(401).send({ error: "Unauthorized agent" });
-        return;
+        return reply.status(401).send({ error: "Unauthorized agent" });
       }
 
       if (
@@ -60,21 +75,14 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
         url.startsWith("/request-approval") ||
         (req.method === "POST" && url === "/api/approvals")
       ) {
-        done();
         return;
       }
-      if (!config.dashboardToken) {
-        done();
-        return;
-      }
+      if (!config.dashboardToken) return;
       const token =
         (req.headers["x-guardian-token"] as string | undefined) ??
         (req.query as Record<string, string>)["token"];
-      if (token === config.dashboardToken) {
-        done();
-        return;
-      }
-      reply.status(401).send({ error: "Unauthorized" });
+      if (token === config.dashboardToken) return;
+      return reply.status(401).send({ error: "Unauthorized" });
     },
   );
 
@@ -312,6 +320,59 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
       );
       broadcast({ type: "approval", status: "pending" });
       void reply.status(201).send(approval);
+    },
+  );
+
+  // ── Agent enrollment (chave por máquina) ───────────────────────────────────
+  // Troca o segredo de enrollment (distribuído pelo instalador corporativo)
+  // por uma chave individual da máquina. Só o sha256 da chave é armazenado;
+  // o valor bruto aparece uma única vez, na resposta.
+  fastify.post(
+    "/api/agent/enroll",
+    async (req: FastifyRequest<{ Body: { hostname?: string } }>, reply) => {
+      const token = req.headers["x-guardian-enrollment-token"] as
+        | string
+        | undefined;
+      // Fail-closed: sem enrollmentSecret configurado, ninguém se registra.
+      if (!config.enrollmentSecret || token !== config.enrollmentSecret) {
+        return void reply
+          .status(401)
+          .send({ error: "Unauthorized enrollment" });
+      }
+      const hostname = String(req.body?.hostname ?? "").trim();
+      if (!hostname) {
+        return void reply.status(400).send({ error: "hostname required" });
+      }
+      const agentKey = randomBytes(32).toString("hex");
+      const keyId = randomBytes(8).toString("hex");
+      await store.createAgentKey({
+        id: keyId,
+        machineId: hostname,
+        keyHash: sha256(agentKey),
+        createdAt: new Date().toISOString(),
+      });
+      await store.appendAuditEntry("agent-enroll", {
+        keyId,
+        machineId: hostname,
+      });
+      void reply.status(201).send({ keyId, agentKey });
+    },
+  );
+
+  // Administração das chaves de agente (auth de dashboard — fora de /api/agent/).
+  fastify.get("/api/agent-keys", async (_req, reply) => {
+    void reply.send(await store.listAgentKeys());
+  });
+
+  fastify.post(
+    "/api/agent-keys/:id/revoke",
+    async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+      const revoked = await store.revokeAgentKey(req.params.id);
+      if (!revoked) return void reply.status(404).send({ error: "Not found" });
+      await store.appendAuditEntry("agent-key-revoke", {
+        keyId: req.params.id,
+      });
+      void reply.send({ success: true });
     },
   );
 

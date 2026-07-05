@@ -151,6 +151,14 @@ export interface MachineRow {
   lastSeen: string;
 }
 
+/** Chave de agente por máquina (enrollment). O valor bruto nunca é armazenado. */
+export interface AgentKeyRow {
+  id: string;
+  machineId: string;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
 // ── Audit log entry (chained hash) ────────────────────────────────────────────
 
 export interface AuditEntry {
@@ -221,6 +229,16 @@ export interface Config {
   databaseUrl: string;
   /** Servidor: chave compartilhada exigida nos endpoints /api/agent/*. */
   agentApiKey: string;
+  /**
+   * Servidor: segredo trocado por uma chave de agente por máquina no
+   * POST /api/agent/enroll. Vazio = enrollment desabilitado (fail-closed).
+   */
+  enrollmentSecret: string;
+  /**
+   * Servidor: aceita a agentApiKey compartilhada legada além das chaves por
+   * máquina. Deixe true durante a migração; false exige enrollment.
+   */
+  allowLegacyAgentKey: boolean;
   /** Cliente: URL pública do servidor central (ex.: https://guardian.empresa.com). */
   centralUrl: string;
   /** Cliente: chave usada pelos hooks para reportar ao servidor central. */

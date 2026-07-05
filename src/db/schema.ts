@@ -73,6 +73,16 @@ CREATE TABLE IF NOT EXISTS custom_detectors (
 
 CREATE INDEX IF NOT EXISTS idx_custom_detectors_created ON custom_detectors(created_at DESC);
 
+CREATE TABLE IF NOT EXISTS agent_keys (
+  id         TEXT PRIMARY KEY,
+  machine_id TEXT NOT NULL,
+  key_hash   TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_keys_hash ON agent_keys(key_hash);
+
 CREATE TABLE IF NOT EXISTS machines (
   hostname            TEXT PRIMARY KEY,
   username            TEXT NOT NULL DEFAULT '',

@@ -30,16 +30,19 @@ CLI="node --experimental-strip-types ${SCRIPT_DIR}/src/cli/index.ts"
 
 SERVER_URL="${GUARDIAN_CENTRAL_URL:-}"
 AGENT_KEY="${GUARDIAN_CENTRAL_KEY:-}"
+ENROLL_CRED=${GUARDIAN_ENROLLMENT_TOKEN:-}
 INSTALL_SERVICE=1
 
 usage() {
-  echo "Uso: $0 --server <url-do-servidor-central> --key <chave-de-agente> [--no-service]"
+  echo "Uso: $0 --server <url-do-servidor-central> (--enroll-token <token> | --key <chave>) [--no-service]"
   echo ""
-  echo "  --server      URL do dashboard central (ex.: https://guardian.empresa.com)"
-  echo "  --key         Chave de agente (GUARDIAN_AGENT_KEY definida no servidor)"
-  echo "  --no-service  Não instala o daemon local como serviço (systemd/launchd)"
+  echo "  --server        URL do dashboard central (ex.: https://guardian.empresa.com)"
+  echo "  --enroll-token  Token de enrollment (GUARDIAN_ENROLLMENT_SECRET do servidor)."
+  echo "                  Gera uma chave individual desta máquina, revogável no dashboard."
+  echo "  --key           Chave de agente compartilhada legada (GUARDIAN_AGENT_KEY)"
+  echo "  --no-service    Não instala o daemon local como serviço (systemd/launchd)"
   echo ""
-  echo "Também aceita as variáveis GUARDIAN_CENTRAL_URL e GUARDIAN_CENTRAL_KEY."
+  echo "Também aceita GUARDIAN_CENTRAL_URL, GUARDIAN_CENTRAL_KEY e GUARDIAN_ENROLLMENT_TOKEN."
   exit 1
 }
 
@@ -47,6 +50,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --server) SERVER_URL="${2:-}"; shift 2 ;;
     --key)    AGENT_KEY="${2:-}";  shift 2 ;;
+    --enroll-token) ENROLL_CRED=${2:-}; shift 2 ;;
     --no-service) INSTALL_SERVICE=0; shift ;;
     -h|--help) usage ;;
     *) die "Argumento desconhecido: $1" ;;
@@ -54,7 +58,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "${SERVER_URL}" ]] || usage
-[[ -n "${AGENT_KEY}"  ]] || usage
+[[ -n "${AGENT_KEY}" || -n "${ENROLL_CRED}" ]] || usage
 
 # ── 1. Node.js ────────────────────────────────────────────────────────────────
 header "1/5  Verificando Node.js"
@@ -102,6 +106,22 @@ if command -v curl &>/dev/null; then
     warn "Não foi possível alcançar ${SERVER_URL%/}/health agora."
     warn "A instalação continua — os eventos ficam em fila local até o servidor responder."
   fi
+fi
+
+# Enrollment: troca o token de enrollment por uma chave individual desta
+# máquina (revogável no dashboard). Fail-closed: sem chave, sem instalação.
+if [[ -z "${AGENT_KEY}" && -n "${ENROLL_CRED}" ]]; then
+  info "Registrando esta máquina no servidor central (enrollment)…"
+  MACHINE_HOSTNAME="$(hostname 2>/dev/null || echo "${HOSTNAME:-unknown}")"
+  ENROLL_RESPONSE="$(curl -sf --max-time 10 \
+    -X POST "${SERVER_URL%/}/api/agent/enroll" \
+    -H "Content-Type: application/json" \
+    -H "X-Guardian-Enrollment-Token: ${ENROLL_CRED}" \
+    -d "{\"hostname\":\"${MACHINE_HOSTNAME}\"}")" \
+    || die "Enrollment falhou — verifique o token e a URL do servidor."
+  AGENT_KEY="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).agentKey ?? "")' "${ENROLL_RESPONSE}")"
+  [[ -n "${AGENT_KEY}" ]] || die "Enrollment não retornou uma chave de agente."
+  ok "Máquina registrada — chave individual emitida"
 fi
 
 info "Registrando hooks no Claude Code e gravando config…"
