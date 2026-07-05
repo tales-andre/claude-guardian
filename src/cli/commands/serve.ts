@@ -31,7 +31,13 @@ function maybeStartHttpsProxy(
     scan: (input) => {
       try {
         const r = scanGui(db, config, input);
-        return { action: r.action, reason: r.reason };
+        return {
+          action: r.action,
+          reason: r.reason,
+          ...(r.substitutedText != null
+            ? { rewrittenBody: r.substitutedText }
+            : {}),
+        };
       } catch {
         return {
           action: "block",

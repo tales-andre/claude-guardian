@@ -1,5 +1,6 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
+import { entityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import type { Detector } from "../engine/detectors/types.ts";
 import { scanSync } from "../engine/index.ts";
@@ -14,6 +15,7 @@ import { appendAuditEntry } from "./audit.ts";
 import { dashboardBaseUrl, reportToCentral } from "./central.ts";
 import { recordIncident } from "./incident.ts";
 import { evaluatePolicy, findApprovalTtl } from "./policy.ts";
+import { substituteText } from "./substitute.ts";
 
 // ── Scan para o proxy MCP (Claude Desktop / Kiro IDE) ────────────────────────
 // Reusa o mesmo engine/policy/approval/audit dos hooks e da extensão. Roda
@@ -43,6 +45,8 @@ export interface McpScanResponse {
   action: PolicyAction;
   findings: McpScanFinding[];
   redactedText?: string;
+  /** Texto reescrito com dados fictícios (ação substitute). */
+  substitutedText?: string;
   approvalUrl?: string;
   reason: string;
 }
@@ -95,6 +99,7 @@ export function scanMcp(
   const extraDetectors: Detector[] = [
     gitleaksDetector,
     ...loadCustomDetectors(db),
+    ...(config.entityDetection ? entityDetectors : []),
   ];
 
   const res = scanSync(req.text, {
@@ -109,6 +114,38 @@ export function scanMcp(
 
   if (action === "allow" || findings.length === 0) {
     return { action: "allow", findings: [], reason: "Nenhum dado sensível." };
+  }
+
+  if (action === "substitute") {
+    let substitutedText: string;
+    try {
+      substitutedText = substituteText(
+        req.text,
+        findings,
+        config.substitutionSalt,
+      );
+    } catch {
+      return failClosed(req.tool);
+    }
+    const incident = recordIncident(
+      db,
+      req.tool,
+      sessionId,
+      findings,
+      "substitute",
+    );
+    appendAuditEntry(db, "substitute", {
+      incidentId: incident.id,
+      tool: req.tool,
+      dataTypes: incident.dataTypes,
+    });
+    reportToCentral(config, incident, findings, null, "substitute");
+    return {
+      action: "substitute",
+      findings: findings.map(toFinding),
+      substitutedText,
+      reason: "Dado sensível substituído por valores fictícios no tráfego MCP.",
+    };
   }
 
   if (action === "redact") {

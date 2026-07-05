@@ -20,9 +20,10 @@ export interface JsonRpcMessage {
 }
 
 export interface ScanDecision {
-  action: "allow" | "block" | "redact" | "require-approval";
+  action: "allow" | "block" | "redact" | "require-approval" | "substitute";
   reason: string;
   redactedText?: string;
+  substitutedText?: string;
 }
 export type ScanFn = (
   tool: "McpToolCall" | "McpToolResult",
@@ -69,17 +70,23 @@ export function handleClientMessage(
   if (decision.action === "block" || decision.action === "require-approval") {
     return { toClient: blockError(msg.id, decision.reason) };
   }
-  if (decision.action === "redact" && decision.redactedText) {
-    let redacted: unknown = args;
+  const rewriteText =
+    decision.action === "redact"
+      ? decision.redactedText
+      : decision.action === "substitute"
+        ? decision.substitutedText
+        : undefined;
+  if (rewriteText) {
+    let rewrittenArgs: unknown = args;
     try {
-      redacted = JSON.parse(decision.redactedText);
+      rewrittenArgs = JSON.parse(rewriteText);
     } catch {
-      // se a redação quebrar o JSON, é mais seguro bloquear
-      return { toClient: blockError(msg.id, "redação inválida") };
+      // se a reescrita quebrar o JSON, é mais seguro bloquear
+      return { toClient: blockError(msg.id, "reescrita inválida") };
     }
     const rewritten: JsonRpcMessage = {
       ...msg,
-      params: { ...msg.params, arguments: redacted },
+      params: { ...msg.params, arguments: rewrittenArgs },
     };
     if (msg.id != null) pending.set(msg.id, name);
     return { toChild: rewritten };
@@ -189,6 +196,8 @@ async function main(): Promise<void> {
       const r = scanMcp(db, config, { tool, serverName, toolName, text });
       const d: ScanDecision = { action: r.action, reason: r.reason };
       if (r.redactedText !== undefined) d.redactedText = r.redactedText;
+      if (r.substitutedText !== undefined)
+        d.substitutedText = r.substitutedText;
       return d;
     } catch {
       return {

@@ -1,5 +1,6 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
+import { entityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import type { Detector } from "../engine/detectors/types.ts";
 import { scanSync } from "../engine/index.ts";
@@ -14,6 +15,7 @@ import { appendAuditEntry } from "./audit.ts";
 import { dashboardBaseUrl, reportToCentral } from "./central.ts";
 import { recordIncident } from "./incident.ts";
 import { evaluatePolicy, findApprovalTtl } from "./policy.ts";
+import { substituteText } from "./substitute.ts";
 
 // ── Scan para o proxy HTTPS do GUI Gateway (Claude Desktop) ──────────────────
 // Espelha scanWeb/scanMcp. Recebe o corpo decifrado da request para a API da
@@ -39,13 +41,16 @@ export interface GuiScanFinding {
 export interface GuiScanResponse {
   action: PolicyAction;
   findings: GuiScanFinding[];
+  /** Corpo da request reescrito com dados fictícios (ação substitute). */
+  substitutedText?: string;
   approvalUrl?: string;
   reason: string;
 }
 
 const ACTION_PRIORITY: Record<PolicyAction, number> = {
-  block: 4,
-  "require-approval": 3,
+  block: 5,
+  "require-approval": 4,
+  substitute: 3,
   redact: 2,
   allow: 1,
 };
@@ -147,6 +152,7 @@ export function scanGui(
     gitleaksDetector,
     ...loadCustomDetectors(db),
   ];
+  if (config.entityDetection) extraDetectors.push(...entityDetectors);
   const { promptText, uploadText } = extractGuiText(req.bodyText);
 
   let promptFindings: DetectorFinding[] = [];
@@ -200,6 +206,40 @@ export function scanGui(
       action: "allow",
       findings: [],
       reason: "Liberação ativa para o escopo.",
+    };
+  }
+
+  if (action === "substitute") {
+    let substitutedText: string;
+    try {
+      // Reescreve o CORPO inteiro da request: troca cada valor sensível pelo
+      // seu fake onde quer que apareça no JSON, preservando a estrutura.
+      substitutedText = substituteText(
+        req.bodyText,
+        allFindings,
+        config.substitutionSalt,
+      );
+    } catch {
+      return failClosed();
+    }
+    const incident = recordIncident(
+      db,
+      tool,
+      sessionId,
+      allFindings,
+      "substitute",
+    );
+    appendAuditEntry(db, "substitute", {
+      incidentId: incident.id,
+      tool,
+      dataTypes: incident.dataTypes,
+    });
+    reportToCentral(config, incident, allFindings, null, "substitute");
+    return {
+      action: "substitute",
+      findings: allFindings.map(toFinding),
+      substitutedText,
+      reason: "Dado sensível substituído por valores fictícios no envio.",
     };
   }
 

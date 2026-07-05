@@ -37,6 +37,8 @@ export const DEFAULT_CONFIG: Config = {
   agentApiKey: "",
   centralUrl: "",
   centralApiKey: "",
+  substitutionSalt: "",
+  entityDetection: false,
   policies: [
     {
       id: "block-critical-secrets",

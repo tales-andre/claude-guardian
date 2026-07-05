@@ -68,7 +68,15 @@ interface Detector {
 
 ### Policy engine (`src/lib/policy.ts`)
 
-`evaluatePolicy(findings, tool, rules)` returns the single highest-priority `PolicyAction` across all matching rules: `block > require-approval > redact > allow`. Short-circuits on first `block`. Rules match on `dataTypes`, `tools`, `detectorIds`, and `minSeverity`.
+`evaluatePolicy(findings, tool, rules)` returns the single highest-priority `PolicyAction` across all matching rules: `block > require-approval > substitute > redact > allow`. Short-circuits on first `block`. Rules match on `dataTypes`, `tools`, `detectorIds`, and `minSeverity`.
+
+### Substitution — fake placeholders (`src/lib/substitute.ts`)
+
+The `substitute` action rewrites egress with **plausible fictitious values** instead of blocking/masking, so the prompt can still be sent with fake data. **Egress-only, one-way**: nothing restores the LLM's response (no vault, no round-trip). `generateFake(dataType, rawValue, salt)` is **deterministic** (seeded by `sha256(salt:dataType:rawValue)`) → the same real value always maps to the same fake, giving referential integrity within and across turns without storing a map. Fakes are **format-preserving**: fake CPF/CNPJ pass their check digits, fake cards pass Luhn, emails use reserved `example.com`, names become `First Last`; dataTypes without a dedicated generator fall back to a length/char-class "skeleton scramble", then to mask. `substituteText(text, findings, salt)` replaces longest raw values first (avoids corrupting substrings). Wired into all egress surfaces (`user-prompt-submit`, `mcp-scan`, `web-scan`, `gui-scan`); every branch is **fail-closed** (any rewrite error → block). The HTTPS proxy forwards the rewritten body with a recomputed `content-length`.
+
+### Entity detection — light NER (`src/engine/detectors/entity.ts`)
+
+`entityDetectors` (person-name, postal-address) raise PII recall for what structured regex can't catch (names/addresses). **Opt-in** via `config.entityDetection` (added as extra detectors like gitleaks; local mode is unchanged when off). This is the fast in-process floor; a real ONNX NER model belongs in the persistent daemon (warm), plugged via the same `Detector` interface. Conservative on purpose (substitution fails open, so prefer a miss over false positives).
 
 ### Approval workflow (`src/lib/approval.ts`)
 
@@ -80,7 +88,7 @@ Append-only SHA-256 hash chain: each entry stores `prevHash` and `hash = sha256(
 
 ### Config (`src/config/`)
 
-`loadConfig()` checks `./claude-guardian.config.json` (CWD) first, then falls back to `~/.config/claude-guardian/config.json`. Validation is done with Zod. Falls back to `DEFAULT_CONFIG` silently on parse failure (fail-open for config, fail-closed for scan timeouts).
+`loadConfig()` checks `./claude-guardian.config.json` (CWD) first, then falls back to `~/.config/claude-guardian/config.json`. Validation is done with Zod. Falls back to `DEFAULT_CONFIG` silently on parse failure (fail-open for config, fail-closed for scan timeouts). Substitution knobs (both default to off/empty, keeping local mode identical): `substitutionSalt` (`GUARDIAN_SUBSTITUTION_SALT`) seeds the fake generators — set a secret per install to prevent cross-org fake correlation; `entityDetection` (`GUARDIAN_ENTITY_DETECTION=true`) enables the name/address detectors.
 
 ### Dashboard server (`src/server/api.ts`)
 

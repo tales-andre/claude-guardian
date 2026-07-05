@@ -14,7 +14,13 @@ const policyRuleSchema = z.object({
   tools: z.array(z.string()).optional(),
   detectorIds: z.array(z.string()).optional(),
   minSeverity: severitySchema.optional(),
-  action: z.enum(["allow", "block", "require-approval", "redact"]),
+  action: z.enum([
+    "allow",
+    "block",
+    "require-approval",
+    "redact",
+    "substitute",
+  ]),
   ttlSeconds: z.number().int().positive().optional(),
 });
 
@@ -40,6 +46,8 @@ const configSchema = z.object({
   agentApiKey: z.string().default(""),
   centralUrl: z.string().default(""),
   centralApiKey: z.string().default(""),
+  substitutionSalt: z.string().default(""),
+  entityDetection: z.boolean().default(false),
 });
 
 // Overrides de ambiente — permitem configurar o servidor em containers (Docker/
@@ -58,6 +66,12 @@ function applyEnvOverrides(config: Config): Config {
     agentApiKey: env["GUARDIAN_AGENT_KEY"] ?? config.agentApiKey,
     centralUrl: env["GUARDIAN_CENTRAL_URL"] ?? config.centralUrl,
     centralApiKey: env["GUARDIAN_CENTRAL_KEY"] ?? config.centralApiKey,
+    substitutionSalt:
+      env["GUARDIAN_SUBSTITUTION_SALT"] ?? config.substitutionSalt,
+    entityDetection:
+      env["GUARDIAN_ENTITY_DETECTION"] != null
+        ? env["GUARDIAN_ENTITY_DETECTION"] === "true"
+        : config.entityDetection,
   };
 }
 

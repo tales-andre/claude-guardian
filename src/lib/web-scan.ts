@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type BetterSqlite3 from "better-sqlite3";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
+import { entityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import type { Detector } from "../engine/detectors/types.ts";
 import { scanSync } from "../engine/index.ts";
@@ -15,6 +16,7 @@ import { appendAuditEntry } from "./audit.ts";
 import { dashboardBaseUrl, reportToCentral } from "./central.ts";
 import { recordIncident } from "./incident.ts";
 import { evaluatePolicy, findApprovalTtl } from "./policy.ts";
+import { substituteText } from "./substitute.ts";
 
 // ── Scan para a extensão de navegador (POST /api/scan-web) ───────────────────
 // O scan roda 100% na máquina (daemon local): o texto do prompt/upload nunca
@@ -55,13 +57,16 @@ export interface WebScanResponse {
   action: PolicyAction;
   findings: WebScanFinding[];
   redactedText?: string;
+  /** Texto reescrito com dados fictícios (ação substitute). */
+  substitutedText?: string;
   approvalUrl?: string;
   reason: string;
 }
 
 const ACTION_PRIORITY: Record<PolicyAction, number> = {
-  block: 4,
-  "require-approval": 3,
+  block: 5,
+  "require-approval": 4,
+  substitute: 3,
   redact: 2,
   allow: 1,
 };
@@ -116,6 +121,7 @@ export function scanWeb(
   const extraDetectors: Detector[] = [
     gitleaksDetector,
     ...loadCustomDetectors(db),
+    ...(config.entityDetection ? entityDetectors : []),
   ];
 
   // ── Scan do texto do prompt (WebPrompt) ───────────────────────────────────
@@ -178,6 +184,40 @@ export function scanWeb(
       action: "allow",
       findings: [],
       reason: "Nenhum dado sensível detectado.",
+    };
+  }
+
+  // ── Substitute (somente texto) — reescreve com dados fictícios ────────────
+  if (action === "substitute") {
+    let substitutedText: string;
+    try {
+      substitutedText = substituteText(
+        text,
+        textFindings,
+        config.substitutionSalt,
+      );
+    } catch {
+      return failClosed(tool);
+    }
+    const incident = recordIncident(
+      db,
+      tool,
+      sessionId,
+      allFindings,
+      "substitute",
+    );
+    appendAuditEntry(db, "substitute", {
+      incidentId: incident.id,
+      tool,
+      dataTypes: incident.dataTypes,
+    });
+    reportToCentral(config, incident, allFindings, null, "substitute");
+    return {
+      action: "substitute",
+      findings: allFindings.map(toWebFinding),
+      substitutedText,
+      reason:
+        "Dado sensível substituído por valores fictícios. Confirme o envio.",
     };
   }
 

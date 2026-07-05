@@ -30,9 +30,16 @@ export type DataType =
   | "phone-br"
   | "phone-jp"
   | "private-ip"
+  | "person-name"
+  | "postal-address"
   | string;
 
-export type PolicyAction = "allow" | "block" | "require-approval" | "redact";
+export type PolicyAction =
+  | "allow"
+  | "block"
+  | "require-approval"
+  | "redact"
+  | "substitute";
 
 // ── Detector finding ──────────────────────────────────────────────────────────
 
@@ -218,4 +225,16 @@ export interface Config {
   centralUrl: string;
   /** Cliente: chave usada pelos hooks para reportar ao servidor central. */
   centralApiKey: string;
+  // ── Substituição por placeholders fictícios (opcional) ─────────────────────
+  /**
+   * Salt que semeia os geradores de valores fictícios da ação `substitute`.
+   * Vazio = salt público padrão (ainda determinístico). Defina um segredo por
+   * instalação para evitar correlação de fakes entre organizações.
+   */
+  substitutionSalt: string;
+  /**
+   * Liga o detector de entidades (nomes/endereços) como extraDetector nas
+   * superfícies de egress. Vazio/false = comportamento local inalterado.
+   */
+  entityDetection: boolean;
 }

@@ -16,8 +16,10 @@ export interface ProxyScanInput {
   path: string;
 }
 export interface ProxyScanResult {
-  action: "allow" | "block" | "redact" | "require-approval";
+  action: "allow" | "block" | "redact" | "require-approval" | "substitute";
   reason: string;
+  /** Corpo reescrito com dados fictícios (ação substitute) — encaminhado no lugar do original. */
+  rewrittenBody?: string;
 }
 export type ProxyScanFn = (input: ProxyScanInput) => ProxyScanResult;
 
@@ -120,6 +122,17 @@ function handleH2Stream(
       }
       return;
     }
+    // substitute: encaminha o corpo reescrito (fakes), com content-length novo.
+    if (decision.action === "substitute" && decision.rewrittenBody != null) {
+      const buf = Buffer.from(decision.rewrittenBody, "utf8");
+      forwardH2(
+        stream,
+        { ...headers, "content-length": String(buf.length) },
+        [buf],
+        opts,
+      );
+      return;
+    }
     forwardH2(stream, headers, chunks, opts);
   });
 }
@@ -153,6 +166,10 @@ function handleH1(
       host: authority,
       port: 443,
     };
+    const outChunks =
+      decision.action === "substitute" && decision.rewrittenBody != null
+        ? [Buffer.from(decision.rewrittenBody, "utf8")]
+        : chunks;
     const upReq = tls.connect(
       {
         host: up.host,
@@ -164,7 +181,7 @@ function handleH1(
         upReq.write(
           `${method} ${path} HTTP/1.1\r\nhost: ${authority}\r\nconnection: close\r\n\r\n`,
         );
-        for (const c of chunks) upReq.write(c);
+        for (const c of outChunks) upReq.write(c);
       },
     );
     upReq.on("error", () => {

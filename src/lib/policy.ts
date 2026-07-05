@@ -48,9 +48,13 @@ export function evaluatePolicy(
 
   const enabledRules = rules.filter((r) => r.enabled);
 
+  // substitute fica acima de redact: quando ambas casam, preferimos a mitigação
+  // mais útil (prompt segue com dados fictícios plausíveis em vez de [REDACTED]).
+  // Ambas ficam abaixo de require-approval/block — controles mais fortes vencem.
   const actionPriority: Record<PolicyAction, number> = {
-    block: 4,
-    "require-approval": 3,
+    block: 5,
+    "require-approval": 4,
+    substitute: 3,
     redact: 2,
     allow: 1,
   };

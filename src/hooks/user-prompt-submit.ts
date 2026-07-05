@@ -8,6 +8,7 @@ if (existsSync(join(process.cwd(), ".guardian-bypass"))) process.exit(0);
 import { loadConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
+import { entityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import { scanSync } from "../engine/index.ts";
 import {
@@ -27,6 +28,7 @@ import {
   recordIncident,
 } from "../lib/incident.ts";
 import { evaluatePolicy, findApprovalTtl } from "../lib/policy.ts";
+import { substituteText } from "../lib/substitute.ts";
 import type { DataType } from "../types/index.ts";
 
 // ── Hook contract ─────────────────────────────────────────────────────────────
@@ -75,7 +77,11 @@ async function main(): Promise<void> {
   const { findings, timedOut } = scanSync(prompt, {
     timeoutMs: config.engineTimeoutMs,
     allowlist: config.allowlist,
-    extraDetectors: [gitleaksDetector, ...customDetectors],
+    extraDetectors: [
+      gitleaksDetector,
+      ...customDetectors,
+      ...(config.entityDetection ? entityDetectors : []),
+    ],
   });
 
   if (timedOut) {
@@ -93,6 +99,43 @@ async function main(): Promise<void> {
 
   const action = evaluatePolicy(findings, "UserPromptSubmit", config.policies);
   if (action === "allow") process.exit(0);
+
+  // ── Substitute — reescreve com dados fictícios plausíveis ──────────────────
+  // Mão única: só protege o que SAI (a resposta não é restaurada). Falha
+  // fechada — qualquer erro na reescrita vira block, nunca envia o valor real.
+  if (action === "substitute") {
+    let substituted: string;
+    try {
+      substituted = substituteText(prompt, findings, config.substitutionSalt);
+    } catch {
+      process.stdout.write(
+        JSON.stringify({
+          decision: "block",
+          reason:
+            "claude-guardian: falha ao substituir dado sensível — bloqueado por segurança",
+        }) + "\n",
+      );
+      process.exit(2);
+    }
+    process.stdout.write(
+      JSON.stringify({ hookSpecificOutput: { updatedPrompt: substituted } }) +
+        "\n",
+    );
+    const incident = recordIncident(
+      db,
+      "UserPromptSubmit",
+      sessionId,
+      findings,
+      "substitute",
+    );
+    appendAuditEntry(db, "substitute", {
+      incidentId: incident.id,
+      tool: "UserPromptSubmit",
+      dataTypes: incident.dataTypes,
+    });
+    reportToCentral(config, incident, findings, null, "substitute");
+    process.exit(0);
+  }
 
   // ── Redact ────────────────────────────────────────────────────────────────
   if (action === "redact") {
