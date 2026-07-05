@@ -51,6 +51,11 @@
       showOverlay("block", formatBlock(result));
     } else if (result && result.action === "require-approval") {
       showOverlay("approval", formatApproval(result));
+    } else if (result && result.action === "substitute") {
+      // Envio NÃO é bloqueado — o corpo já foi reescrito com dados fictícios.
+      // Toast não-bloqueante só avisa o usuário do que foi trocado.
+      hideOverlay();
+      showToast(formatSubstitute(result));
     } else {
       hideOverlay();
     }
@@ -315,6 +320,82 @@
 
   function hideOverlay() {
     if (overlayEl) overlayEl.classList.remove("show");
+  }
+
+  // ── Toast não-bloqueante (ação substitute) ────────────────────────────────
+  // Diferente do overlay modal, o toast não trava a página: o envio já seguiu
+  // com os dados fictícios; ele só informa. Auto-dismiss em 6s.
+  let toastEl;
+  let toastTimer;
+  function ensureToast() {
+    if (toastEl) return toastEl;
+    toastEl = document.createElement("div");
+    toastEl.id = "guardian-toast";
+    toastEl.innerHTML = `
+      <style>
+        #guardian-toast { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647;
+          display: none; width: min(360px, calc(100vw - 32px));
+          font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          -webkit-font-smoothing: antialiased; }
+        #guardian-toast.show { display: block; animation: gt-in .18s ease-out; }
+        @keyframes gt-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+        @media (prefers-reduced-motion: reduce) { #guardian-toast.show { animation: none; } }
+        #guardian-toast .gt-card { background: #ffffff; color: #16181d; border: 1px solid #e3e6eb;
+          border-left: 3px solid #067647; border-radius: 9px; padding: 12px 14px;
+          box-shadow: 0 1px 2px rgba(0,0,0,.16), 0 12px 32px rgba(8,10,14,.28);
+          display: flex; gap: 10px; align-items: flex-start; }
+        #guardian-toast .gt-ico { flex: none; color: #067647; margin-top: 1px; }
+        #guardian-toast .gt-main { min-width: 0; flex: 1; }
+        #guardian-toast .gt-title { font-size: 13.5px; font-weight: 650; letter-spacing: -.01em; line-height: 1.35; }
+        #guardian-toast .gt-text { margin-top: 2px; font-size: 12.5px; line-height: 1.5; color: #3d434d; }
+        #guardian-toast .gt-types { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+        #guardian-toast .gt-chip { font-size: 11px; background: #f4f5f7; border: 1px solid #e9ebef;
+          color: #5a6270; padding: 1px 7px; border-radius: 99px; }
+        #guardian-toast .gt-close { flex: none; background: transparent; border: 0; cursor: pointer;
+          color: #98a1ae; font-size: 16px; line-height: 1; padding: 2px; }
+        @media (prefers-color-scheme: dark) {
+          #guardian-toast .gt-card { background: #1c1f26; color: #e8eaee; border-color: #2e333c; border-left-color: #3dd68c; }
+          #guardian-toast .gt-ico { color: #3dd68c; }
+          #guardian-toast .gt-text { color: #c3c9d2; }
+          #guardian-toast .gt-chip { background: #262b33; border-color: #30353f; color: #aeb6c2; }
+        }
+      </style>
+      <div class="gt-card" role="status" aria-live="polite">
+        <span class="gt-ico">${SHIELD_SVG}</span>
+        <div class="gt-main" id="gt-main"></div>
+        <button class="gt-close" id="gt-close" aria-label="Fechar">×</button>
+      </div>`;
+    (document.body || document.documentElement).appendChild(toastEl);
+    toastEl
+      .querySelector("#gt-close")
+      .addEventListener("click", hideToast);
+    return toastEl;
+  }
+
+  function showToast(html) {
+    const el = ensureToast();
+    el.querySelector("#gt-main").innerHTML = html;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 6000);
+  }
+
+  function hideToast() {
+    if (toastEl) toastEl.classList.remove("show");
+    clearTimeout(toastTimer);
+  }
+
+  function formatSubstitute(r) {
+    const findings = r.findings || [];
+    const n = findings.length;
+    const types = [...new Set(findings.map((f) => f.label))].slice(0, 6);
+    const chips = types
+      .map((t) => `<span class="gt-chip">${esc(t)}</span>`)
+      .join("");
+    const noun = n === 1 ? "dado sensível" : "dados sensíveis";
+    return `<div class="gt-title">Guardian protegeu seu envio</div>
+      <div class="gt-text">${n} ${noun} ${n === 1 ? "foi substituído" : "foram substituídos"} por valores fictícios antes de sair.</div>
+      ${chips ? `<div class="gt-types">${chips}</div>` : ""}`;
   }
 
   function findingsTable(findings) {
