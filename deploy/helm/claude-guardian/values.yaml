@@ -8,9 +8,19 @@
 #     --set ingress.enabled=true \
 #     --set ingress.host=guardian.minhaempresa.com
 
+# IMPORTANTE: mantenha 1. O audit é um hash-chain SEQUENCIAL (cada entrada
+# encadeia no hash da anterior) — dois ou mais writers concorrentes contra o
+# mesmo Postgres corromperiam a cadeia. O volume de escrita do central é baixo
+# (só espelho de incidentes/heartbeats), então 1 réplica é suficiente. HA real
+# exigiria um lock por-append (ex.: SELECT ... FOR UPDATE na última linha).
 replicaCount: 1
 
 image:
+  # Em EKS a imagem precisa estar num registry que o cluster puxe — normalmente
+  # ECR. Faça o build e push (ver docs/EKS-DEPLOY.md) e aponte aqui, ex.:
+  #   repository: 123456789012.dkr.ecr.us-east-1.amazonaws.com/claude-guardian
+  #   tag: "1.0.0"
+  # "latest" + sem registry (default abaixo) NÃO puxa em EKS — é só placeholder.
   repository: claude-guardian
   tag: latest
   pullPolicy: IfNotPresent
@@ -47,7 +57,11 @@ ingress:
   path: /
   pathType: Prefix
   tls: []
-  # Exemplo para AWS Load Balancer Controller (EKS):
+  # Exemplo para AWS Load Balancer Controller (EKS).
+  # scheme: `internal` (default, mais seguro) expõe só dentro da VPC/VPN — use
+  # se os agentes (máquinas dos devs) alcançam o central pela rede interna.
+  # Troque para `internet-facing` SE os agentes vivem fora da VPC (ex.: laptops
+  # sem VPN) — senão eles não conseguem espelhar incidentes para o central.
   annotations:
     alb.ingress.kubernetes.io/scheme: internal
     alb.ingress.kubernetes.io/target-type: ip
