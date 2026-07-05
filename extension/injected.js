@@ -427,9 +427,19 @@
         : verdict.action === "substitute"
           ? verdict.substitutedText
           : null;
-    if (typeof rewriteText === "string" && adapter.injectRedaction) {
-      const newBody = adapter.injectRedaction(body, rewriteText);
-      if (typeof newBody === "string") return { block: false, redactedBody: newBody };
+    if (rewriteText !== null) {
+      // A ação exige reescrever o corpo. Só é SEGURA se o adapter deste site
+      // sabe reescrever in-place (injectRedaction) e o resultado é válido.
+      // Caso contrário → FAIL-CLOSED (bloqueia): jamais deixar o dado REAL sair
+      // com o daemon achando que foi mascarado/substituído. Hoje apenas a
+      // claude.ai tem injectRedaction; nos demais sites redact/substitute
+      // degradam para block até o adapter ganhar reescrita validada.
+      if (typeof rewriteText === "string" && adapter.injectRedaction) {
+        const newBody = adapter.injectRedaction(body, rewriteText);
+        if (typeof newBody === "string")
+          return { block: false, redactedBody: newBody };
+      }
+      return { block: true };
     }
     return { block: false };
   }

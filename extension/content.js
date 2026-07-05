@@ -4,6 +4,13 @@
 (() => {
   const api = globalThis.browser ?? globalThis.chrome;
 
+  // Hosts onde o injected.js consegue reescrever o corpo do envio in-place
+  // (têm adapter.injectRedaction). Só nesses a ação `substitute` de fato troca
+  // o dado por fictício; nos demais ela degrada para BLOCK (fail-closed), então
+  // a UI mostra o overlay de bloqueio em vez do toast de "substituído".
+  // Manter em sincronia com os adapters que definem injectRedaction (injected.js).
+  const REWRITE_CAPABLE = /(^|\.)claude\.ai$/i;
+
   // ── Handshake de nonce com o enforcement layer (injected.js, world MAIN) ──
   // Ambos são content scripts document_start: rodam antes de QUALQUER script
   // da página. O nonce é gravado no DOM aqui e lido+removido pelo injected.js
@@ -52,10 +59,16 @@
     } else if (result && result.action === "require-approval") {
       showOverlay("approval", formatApproval(result));
     } else if (result && result.action === "substitute") {
-      // Envio NÃO é bloqueado — o corpo já foi reescrito com dados fictícios.
-      // Toast não-bloqueante só avisa o usuário do que foi trocado.
-      hideOverlay();
-      showToast(formatSubstitute(result));
+      if (REWRITE_CAPABLE.test(location.hostname)) {
+        // Envio NÃO é bloqueado — o corpo já foi reescrito com dados fictícios.
+        // Toast não-bloqueante só avisa o usuário do que foi trocado.
+        hideOverlay();
+        showToast(formatSubstitute(result));
+      } else {
+        // Neste site o injected.js não sabe reescrever in-place, então o envio
+        // é BLOQUEADO (fail-closed). Mostra o overlay de bloqueio honesto.
+        showOverlay("block", formatSubstituteBlocked(result));
+      }
     } else {
       hideOverlay();
     }
@@ -435,6 +448,17 @@
       text: hasFindings
         ? "A mensagem contém dados sensíveis e foi retida nesta máquina. Nada foi enviado ao provedor de IA."
         : r.reason || "A mensagem foi retida pela política de segurança de dados.",
+      findings: r.findings,
+      linkUrl: r.approvalUrl,
+      linkLabel: "Solicitar exceção",
+      closeLabel: "Entendi",
+    });
+  }
+
+  function formatSubstituteBlocked(r) {
+    return renderCard({
+      title: "Envio bloqueado",
+      text: "Este site ainda não suporta substituição por dados fictícios, então a mensagem com dados sensíveis foi retida nesta máquina. Nada foi enviado ao provedor de IA.",
       findings: r.findings,
       linkUrl: r.approvalUrl,
       linkLabel: "Solicitar exceção",
