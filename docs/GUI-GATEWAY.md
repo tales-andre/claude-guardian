@@ -53,11 +53,40 @@ MCP de qualquer forma (arquivos/tools). Fica pendente confirmar se o Kiro IDE
 aceita o mesmo contrato de hook do kiro-cli — se aceitar, ganharíamos cobertura
 de prompt no Kiro IDE sem MITM. Anotar o resultado aqui quando validado.
 
-## Fases futuras (planos separados)
+## Fase 2 — Proxy HTTPS + CA (prompt + anexo no Claude Desktop)
 
-- **Fase 2:** proxy HTTPS + CA/MDM para barrar **prompt + anexo** no Claude
-  Desktop (o único chokepoint honesto para o prompt do Desktop).
-- **Fase 3:** heartbeat/tamper do proxy no fleet.
+**Spike de pinning: PASSOU.** Validado na máquina real — o Claude Desktop
+**não faz cert pinning**: com a CA confiada e um cert de servidor válido, o
+handshake TLS do MITM é aceito e o tráfego HTTP/2 (`a-api.anthropic.com`) é
+decifrável. A interceptação por rede é viável.
+
+Implementado (core):
+
+- `src/lib/mitm-ca.ts` — CA do guardian (persistida em `<dir-do-db>/guardian-ca.crt`)
+  + emissão de cert de servidor por-SNI, assinado pela CA (node-forge). O
+  `fingerprint` SHA-256 é o que o MDM distribui como confiável.
+- `src/proxy/https-proxy.ts` — proxy CONNECT seletivo. Passthrough por padrão;
+  MITM só `*.anthropic.com`. Termina o TLS com cert dinâmico, lê a request
+  (HTTP/2, ALPN=h2, fallback h1), escaneia o corpo e bloqueia (403) ou encaminha.
+- `src/lib/gui-scan.ts` — parseia a request (prompt + `attachments[].extracted_content`,
+  fallback corpo inteiro) e escaneia reusando o pipeline. Tools virtuais
+  `DesktopPrompt`/`DesktopUpload`.
+
+Como rodar (modo local):
+
+```
+GUARDIAN_PROXY_PORT=8890 claude-guardian serve
+```
+
+O `serve` sobe o proxy junto do dashboard, imprime o caminho da CA e o
+fingerprint. **Distribua a CA (`guardian-ca.crt`) via MDM e confie nas máquinas**,
+e aponte o proxy do SO (ou do cliente) para `host:8890`.
+
+### Falta (próximos)
+- Artefatos MDM da CA + config de proxy por canal (`.mobileconfig`/`.reg`/Linux).
+- Heartbeat/tamper do proxy no fleet (listener vivo, CA presente).
+- Validar o schema real do corpo do Desktop (hoje há fallback de corpo inteiro).
 
 Design completo: `docs/superpowers/specs/2026-07-04-gui-gateway-design.md`.
-Plano da Fase 1: `docs/superpowers/plans/2026-07-04-gui-gateway-phase1-mcp.md`.
+Planos: `docs/superpowers/plans/2026-07-04-gui-gateway-phase1-mcp.md` e
+`…-phase2-https.md`.

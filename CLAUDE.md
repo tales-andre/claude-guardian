@@ -113,7 +113,9 @@ MV3 extension (plain JS, no build step; `manifest.firefox.json` for Firefox) cov
 
 ### GUI Gateway (Claude Desktop / Kiro IDE) — `src/proxy/`
 
-`src/proxy/mcp-proxy.ts` is a stdio shim injected into the MCP configs of Claude Desktop and Kiro IDE by `init` (`src/lib/mcp-install.ts`, idempotent + `.guardian.bak` backup). The client spawns the shim instead of the real MCP server; the shim spawns the real one and scans the JSON-RPC stream via `src/lib/mcp-scan.ts` (`scanMcp`, virtual tools `McpToolCall`/`McpToolResult`), reusing the same engine/policy/audit pipeline in-process (no daemon needed). Block = JSON-RPC error `-32001`. Phase 2 (HTTPS proxy + CA for prompt/attachment on Desktop) is a separate plan. Docs: `docs/GUI-GATEWAY.md`.
+`src/proxy/mcp-proxy.ts` is a stdio shim injected into the MCP configs of Claude Desktop and Kiro IDE by `init` (`src/lib/mcp-install.ts`, idempotent + `.guardian.bak` backup). The client spawns the shim instead of the real MCP server; the shim spawns the real one and scans the JSON-RPC stream via `src/lib/mcp-scan.ts` (`scanMcp`, virtual tools `McpToolCall`/`McpToolResult`), reusing the same engine/policy/audit pipeline in-process (no daemon needed). Block = JSON-RPC error `-32001`.
+
+**Phase 2 (HTTPS proxy — prompt/attachment on Claude Desktop):** `src/proxy/https-proxy.ts` is a selective CONNECT proxy (MITM only `*.anthropic.com`, passthrough otherwise) that terminates TLS with a per-SNI cert issued by the guardian CA (`src/lib/mitm-ca.ts`, node-forge), reads the HTTP/2 request and scans it via `src/lib/gui-scan.ts` (`scanGui`, virtual tools `DesktopPrompt`/`DesktopUpload`). Start it with `GUARDIAN_PROXY_PORT=<port> claude-guardian serve` (local mode). Verified: Claude Desktop does not cert-pin. The CA (`<db-dir>/guardian-ca.crt`) is distributed via MDM. Remaining: MDM CA/proxy artifacts + fleet tamper heartbeat. Docs: `docs/GUI-GATEWAY.md`.
 
 ### Fleet & managed settings
 
