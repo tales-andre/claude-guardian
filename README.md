@@ -99,6 +99,9 @@ máquina de origem.
 
 Guia completo (EKS/Helm, RDS, modelo de segurança): [docs/ENTERPRISE.md](docs/ENTERPRISE.md)
 
+Plano de implantação em frota (fases, critérios de saída, MDM):
+[docs/ROLLOUT.md](docs/ROLLOUT.md)
+
 ## Hook Registration (Manual)
 
 If you prefer to register hooks manually, add to `~/.claude/settings.json`:
