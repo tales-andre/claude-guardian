@@ -43,7 +43,11 @@ auth:
   dashboardToken: ""
   # Chave compartilhada dos agentes (hooks nas máquinas dos devs).
   agentKey: ""
-  # Secret existente com as chaves GUARDIAN_DASHBOARD_TOKEN e GUARDIAN_AGENT_KEY
+  # Segredo de enrollment: habilita POST /api/agent/enroll (chave individual
+  # por máquina, revogável no dashboard). Vazio = enrollment desligado.
+  enrollmentSecret: ""
+  # Secret existente com as chaves GUARDIAN_DASHBOARD_TOKEN, GUARDIAN_AGENT_KEY
+  # e (opcional) GUARDIAN_ENROLLMENT_SECRET
   existingSecret: ""
 
 service:
@@ -68,6 +72,25 @@ ingress:
     alb.ingress.kubernetes.io/healthcheck-path: /health
     # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
     # alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+
+  # ── SSO corporativo (ALB + OIDC) — desligado por default ────────────────────
+  # Quando habilitado, o dashboard passa a exigir login no IdP (Okta, Entra ID,
+  # Cognito, …) na frente do ALB. As rotas /api/agent/* ficam FORA do OIDC
+  # (agentes são máquinas, não navegadores) via um segundo Ingress no mesmo
+  # ALB (group.name). Requer AWS Load Balancer Controller e listener HTTPS
+  # (certificate-arn + listen-ports acima). Docs: docs/ENTERPRISE.md.
+  oidc:
+    enabled: false
+    # Nome do grupo de ALB compartilhado pelos dois Ingresses.
+    groupName: claude-guardian
+    issuer: ""
+    authorizationEndpoint: ""
+    tokenEndpoint: ""
+    userInfoEndpoint: ""
+    # Secret k8s (no mesmo namespace) com as chaves clientID e clientSecret.
+    secretName: ""
+    scope: openid
+    sessionTimeout: "3600"
 
 resources:
   requests:

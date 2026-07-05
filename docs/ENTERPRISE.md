@@ -99,9 +99,36 @@ enviam a chave em header.
 | `DATABASE_URL` / `GUARDIAN_DATABASE_URL` | Postgres; vazio = SQLite local |
 | `GUARDIAN_DASHBOARD_TOKEN` | Token do admin no dashboard |
 | `GUARDIAN_AGENT_KEY` | Chave compartilhada dos agentes (sem ela, ingestão desabilitada — fail-closed) |
+| `GUARDIAN_ENROLLMENT_SECRET` | Habilita `POST /api/agent/enroll` (chave individual por máquina; vazio = enrollment desligado) |
+| `GUARDIAN_ALLOW_LEGACY_AGENT_KEY` | `false` desliga a chave compartilhada legada e exige enrollment (padrão `true` para migração) |
 | `GUARDIAN_BIND_HOST` | Bind address (`0.0.0.0` em container) |
 | `GUARDIAN_PORT` | Porta (padrão 7734) |
 | `GUARDIAN_DB_PATH` | Caminho do SQLite (só sem `DATABASE_URL`) |
+
+### SSO no dashboard (ALB + OIDC)
+
+Em EKS, coloque o login corporativo (Okta, Entra ID, Cognito, …) na frente do
+dashboard sem tocar no código: o AWS Load Balancer Controller autentica no IdP
+antes de encaminhar a requisição.
+
+```bash
+helm upgrade guardian deploy/helm/claude-guardian \
+  --reuse-values \
+  --set ingress.oidc.enabled=true \
+  --set ingress.oidc.issuer=https://login.meuidp.com \
+  --set ingress.oidc.authorizationEndpoint=https://login.meuidp.com/authorize \
+  --set ingress.oidc.tokenEndpoint=https://login.meuidp.com/oauth/token \
+  --set ingress.oidc.userInfoEndpoint=https://login.meuidp.com/userinfo \
+  --set ingress.oidc.secretName=guardian-oidc
+```
+
+Pré-requisitos: listener HTTPS no ALB (`certificate-arn` + `listen-ports`
+nas annotations do ingress) e um Secret k8s (`guardian-oidc`) com as chaves
+`clientID` e `clientSecret` do app registrado no IdP.
+
+As rotas `/api/agent/*` ficam **fora** do OIDC (um segundo Ingress no mesmo
+ALB, `group.order` menor): agentes são máquinas e continuam autenticando por
+chave de agente. O `dashboardToken` segue ativo como segunda camada.
 
 ## 2. Instalando o agente nas máquinas
 
@@ -112,8 +139,15 @@ git clone https://github.com/<org>/claude-guardian.git
 cd claude-guardian
 bash enterprise/install-agent.sh \
   --server https://guardian.minhaempresa.com \
-  --key <GUARDIAN_AGENT_KEY>
+  --enroll-token <GUARDIAN_ENROLLMENT_SECRET>
 ```
+
+Com `--enroll-token`, o instalador troca o token pelo endpoint
+`POST /api/agent/enroll` e recebe uma **chave individual desta máquina**
+(revogável em `/api/agent-keys` no dashboard — só o hash fica no servidor).
+`--key <GUARDIAN_AGENT_KEY>` continua aceito para a chave compartilhada
+legada; depois de migrar a frota, desligue-a com
+`GUARDIAN_ALLOW_LEGACY_AGENT_KEY=false` no servidor.
 
 O script registra os hooks no Claude Code, grava `centralUrl`/`centralApiKey`
 na config (`~/.config/claude-guardian/config.json`) e instala o **daemon local
@@ -123,7 +157,7 @@ No Windows, use o equivalente PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File enterprise\install-agent.ps1 `
-  -Server https://guardian.minhaempresa.com -Key <GUARDIAN_AGENT_KEY>
+  -Server https://guardian.minhaempresa.com -EnrollToken <GUARDIAN_ENROLLMENT_SECRET>
 ```
 
 Equivalente manual:

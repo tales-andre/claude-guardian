@@ -1,14 +1,29 @@
 {{- if .Values.ingress.enabled }}
+{{- $oidc := .Values.ingress.oidc | default dict }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "claude-guardian.fullname" . }}
   labels:
     {{- include "claude-guardian.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
   annotations:
+    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
+    {{- if $oidc.enabled }}
+    # SSO na frente do dashboard: o ALB só encaminha depois do login no IdP.
+    alb.ingress.kubernetes.io/group.name: {{ $oidc.groupName | quote }}
+    alb.ingress.kubernetes.io/group.order: "20"
+    alb.ingress.kubernetes.io/auth-type: oidc
+    alb.ingress.kubernetes.io/auth-scope: {{ $oidc.scope | quote }}
+    alb.ingress.kubernetes.io/auth-session-timeout: {{ $oidc.sessionTimeout | quote }}
+    alb.ingress.kubernetes.io/auth-idp-oidc: >-
+      {"issuer":"{{ $oidc.issuer }}",
+       "authorizationEndpoint":"{{ $oidc.authorizationEndpoint }}",
+       "tokenEndpoint":"{{ $oidc.tokenEndpoint }}",
+       "userInfoEndpoint":"{{ $oidc.userInfoEndpoint }}",
+       "secretName":"{{ $oidc.secretName }}"}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- with .Values.ingress.tls }}
@@ -26,4 +41,40 @@ spec:
                 name: {{ include "claude-guardian.fullname" . }}
                 port:
                   name: http
+{{- if $oidc.enabled }}
+---
+# Rotas de agente fora do OIDC: máquinas autenticam por chave de agente
+# (X-Guardian-Agent-Key), não por login de navegador. group.order menor
+# faz esta regra casar antes da regra com auth do dashboard.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "claude-guardian.fullname" . }}-agent
+  labels:
+    {{- include "claude-guardian.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    alb.ingress.kubernetes.io/group.name: {{ $oidc.groupName | quote }}
+    alb.ingress.kubernetes.io/group.order: "10"
+    alb.ingress.kubernetes.io/auth-type: none
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /api/agent
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "claude-guardian.fullname" . }}
+                port:
+                  name: http
+{{- end }}
 {{- end }}
