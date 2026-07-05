@@ -418,8 +418,17 @@
     if (verdict.action === "block" || verdict.action === "require-approval") {
       return { block: true };
     }
-    if (verdict.action === "redact" && typeof verdict.redactedText === "string" && adapter.injectRedaction) {
-      const newBody = adapter.injectRedaction(body, verdict.redactedText);
+    // redact e substitute reescrevem o corpo do envio antes de sair: redact
+    // troca por [REDACTED], substitute troca por dados fictícios plausíveis.
+    // Ambos reusam injectRedaction (reescreve o prompt no corpo do request).
+    const rewriteText =
+      verdict.action === "redact"
+        ? verdict.redactedText
+        : verdict.action === "substitute"
+          ? verdict.substitutedText
+          : null;
+    if (typeof rewriteText === "string" && adapter.injectRedaction) {
+      const newBody = adapter.injectRedaction(body, rewriteText);
       if (typeof newBody === "string") return { block: false, redactedBody: newBody };
     }
     return { block: false };

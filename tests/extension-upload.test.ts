@@ -216,4 +216,29 @@ describe("injected.js — anexo inline no /completion do claude.ai", () => {
     await doFetch(COMPLETION_URL, { method: "POST", body });
     expect(fetchCalls).toHaveLength(1);
   });
+
+  // Ação substitute: o envio PASSA, mas o corpo é reescrito com o texto
+  // fictício devolvido pelo daemon (substitutedText) — não bloqueia.
+  const CPF = "529.982.247-25";
+  const FAKE = "761.274.390-60";
+  const substituteVerdict: Verdict = (payload) => {
+    const text = payload.text ?? "";
+    return text.includes(CPF)
+      ? { action: "substitute", substitutedText: text.split(CPF).join(FAKE) }
+      : { action: "allow", findings: [] };
+  };
+
+  it("substitui o prompt por dados fictícios antes de enviar (não bloqueia)", async () => {
+    const { doFetch, fetchCalls } = setupInjected(substituteVerdict);
+    const body = JSON.stringify({ prompt: `meu CPF é ${CPF}`, attachments: [], files: [] });
+    await doFetch(COMPLETION_URL, { method: "POST", body });
+    expect(fetchCalls).toHaveLength(1);
+    const call = fetchCalls[0];
+    if (!call) throw new Error("esperava uma chamada de fetch");
+    const sent = JSON.parse((call.init as { body: string }).body) as {
+      prompt: string;
+    };
+    expect(sent.prompt).toBe(`meu CPF é ${FAKE}`);
+    expect(sent.prompt).not.toContain(CPF);
+  });
 });
