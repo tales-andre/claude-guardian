@@ -13,6 +13,7 @@ export const creditCardDetector: Detector = {
   label: "Credit Card Number",
   dataType: "credit-card",
   severity: "high",
+  pattern: CC_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(CC_RE)) {

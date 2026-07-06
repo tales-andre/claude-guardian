@@ -88,13 +88,14 @@ Append-only SHA-256 hash chain: each entry stores `prevHash` and `hash = sha256(
 
 ### Config (`src/config/`)
 
-`loadConfig()` checks `./claude-guardian.config.json` (CWD) first, then falls back to `~/.config/claude-guardian/config.json`. Validation is done with Zod. Falls back to `DEFAULT_CONFIG` silently on parse failure (fail-open for config, fail-closed for scan timeouts). Substitution knobs (both default to off/empty, keeping local mode identical): `substitutionSalt` (`GUARDIAN_SUBSTITUTION_SALT`) seeds the fake generators — set a secret per install to prevent cross-org fake correlation; `entityDetection` (`GUARDIAN_ENTITY_DETECTION=true`) enables the name/address detectors.
+`loadConfig()` checks `./claude-guardian.config.json` (CWD) first, then falls back to `~/.config/claude-guardian/config.json`. Validation is done with Zod. Falls back to `DEFAULT_CONFIG` silently on parse failure (fail-open for config, fail-closed for scan timeouts). Substitution knobs (both default to off/empty, keeping local mode identical): `substitutionSalt` (`GUARDIAN_SUBSTITUTION_SALT`) seeds the fake generators — set a secret per install to prevent cross-org fake correlation; `entityDetection` (`GUARDIAN_ENTITY_DETECTION=true`) enables the name/address detectors. `blockedWebModels` (`GUARDIAN_BLOCKED_WEB_MODELS`, comma-separated) blocks browser-extension sends whose declared model matches any pattern (case-insensitive substring, e.g. `fable` blocks `claude-fable-5`); empty = no restriction.
 
 ### Dashboard server (`src/server/api.ts`)
 
 Fastify server serving:
 - `GET /dashboard` — static HTML from `public/dashboard.html`
 - `GET /api/incidents`, `/api/approvals`, `/api/audit`, `/api/metrics`, `/api/policies`
+- `GET /api/detectors` — read-only catalog of every detector (built-in + async + entity + gitleaks + custom) with `kind` (`regex`/`heuristic`/`external`/`custom`) and `pattern` taken from the detector's own `X_RE.source` (never a hand-written copy — see `Detector.pattern`); rendered by the "Detectores" sub-tab of the Policies page (grouping, search, regex highlight, rule cross-reference)
 - `POST /api/approvals/:id/resolve` — approve or deny
 - `GET /api/events` — SSE stream for real-time updates
 
@@ -116,6 +117,8 @@ Additive central-server mode; local mode is unchanged when the new config fields
 ### Browser extension (`extension/`)
 
 MV3 extension (plain JS, no build step; `manifest.firefox.json` for Firefox) covering claude.ai, ChatGPT, Gemini, Copilot, Mistral and Adapta One. `injected.js` runs as a `world: "MAIN"` content script hooking `fetch`/XHR (per-site `ADAPTERS` registry, fail-closed); messages between `content.js` and `injected.js` are authenticated by a `crypto.getRandomValues` nonce handed over via DOM attribute at `document_start` (anti-spoof). Scans go through `background.js` → local daemon `POST /api/scan-web` (`src/lib/web-scan.ts`, virtual tools `WebPrompt`/`WebUpload`; route registered only in SQLite mode). Enterprise config comes from `chrome.storage.managed` (options page becomes read-only). Adapters for Gemini/Copilot/Mistral/Adapta still need real-traffic validation — see `docs/ADAPTER-VALIDATION.md`.
+
+**Model restriction**: adapters with a JSON `model` field (claude.ai, ChatGPT, Copilot, Mistral, Adapta) expose `extractModel(body)`; `decide()` forwards it as `context.model` and `scanWeb` blocks when it matches `config.blockedWebModels` (managed via the dashboard "Modelos bloqueados no navegador" card). The check runs before any content scan and also fires on empty prompts (the `!text` fail-open path still scans when a model is present).
 
 **Attachment enforcement**: uploads are caught at the network layer in `injected.js` (endpoint-agnostic: any `fetch`/XHR body that is `FormData`/`File`/`Blob` → scanned as files). Small text files on claude.ai are NOT multipart uploads — the content is inlined into the `/completion` request as `attachments[].extracted_content`, so `claudeAdapter.extractText` reads that field too. Attachments are **fail-closed** (block when the daemon can't verify) via `adapter.carriesAttachment()`; plain text stays fail-open. Drag-and-drop is site-aware: most sites are blocked at the UI layer (`content.js`, with a synthetic-event overlay reset), but hosts in `NETWORK_ENFORCED_DROP` (claude.ai — its overlay ignores untrusted events) are left to the network/`/completion` layer instead.
 

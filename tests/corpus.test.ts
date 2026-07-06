@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { entityDetectors } from "../src/engine/detectors/entity.ts";
 import { scanSync } from "../src/engine/index.ts";
 import { negatives, positives } from "./corpus/corpus.ts";
 
@@ -27,6 +28,20 @@ describe("corpus de detectores", () => {
   it("zero detecções nos negativos (falso positivo)", () => {
     for (const sample of negatives) {
       const { findings } = scanSync(sample.text);
+      expect(
+        findings.map((f) => `${sample.name} → ${f.detectorId} (${f.snippet})`),
+      ).toEqual([]);
+    }
+  });
+
+  // Mesmo portão com os detectores de entidade ligados (entityDetection=true):
+  // quem roda substitute/block de person-name em frota não pode ter FP nos
+  // negativos — foi exatamente um FP de nome que bloqueou texto técnico real.
+  it("zero detecções nos negativos com detectores de entidade ligados", () => {
+    for (const sample of negatives) {
+      const { findings } = scanSync(sample.text, {
+        extraDetectors: [...entityDetectors],
+      });
       expect(
         findings.map((f) => `${sample.name} → ${f.detectorId} (${f.snippet})`),
       ).toEqual([]);

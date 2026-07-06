@@ -591,6 +591,100 @@
       display: inline-block; vertical-align: middle;
     }
 
+    /* ── Sub-tabs (Regras / Detectores) ─────────────────────────────────────── */
+    .subtabs {
+      display: inline-flex; gap: 2px; padding: 3px;
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); margin-bottom: 20px;
+    }
+    .subtab {
+      border: none; background: transparent; color: var(--text-2);
+      font: inherit; font-size: 12.5px; font-weight: 500;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 7px;
+      transition: background .15s, color .15s;
+    }
+    .subtab:hover { color: var(--text); }
+    .subtab.active {
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+    }
+    .subtab .count-pill {
+      font-size: 10.5px; font-weight: 600; padding: 1px 7px;
+      border-radius: 999px; background: var(--accent-light);
+      color: var(--accent-text); border: 1px solid var(--accent-border);
+    }
+
+    /* ── Catálogo de detectores ─────────────────────────────────────────────── */
+    .det-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .det-chip {
+      border: 1px solid var(--border-2); background: var(--surface);
+      color: var(--text-2); font: inherit; font-size: 11.5px; font-weight: 500;
+      padding: 4px 11px; border-radius: 999px; cursor: pointer;
+      transition: all .15s;
+    }
+    .det-chip:hover { border-color: var(--accent); color: var(--text); }
+    .det-chip.active {
+      background: var(--accent); border-color: var(--accent);
+      color: #fff;
+    }
+    .det-group-title {
+      font-size: 11px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-2);
+      margin: 22px 0 10px; display: flex; align-items: center; gap: 8px;
+    }
+    .det-group-title:first-child { margin-top: 0; }
+    .det-group-title .count-pill {
+      font-size: 10px; font-weight: 600; padding: 1px 7px;
+      border-radius: 999px; background: var(--surface-2);
+      color: var(--text-2); border: 1px solid var(--border);
+      letter-spacing: 0;
+    }
+    .det-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px;
+      transition: border-color .15s;
+    }
+    .det-card:hover { border-color: var(--border-2); }
+    .det-card.inactive { opacity: .6; }
+    .det-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .det-name { font-size: 13px; font-weight: 600; }
+    .det-id {
+      font-family: ui-monospace, monospace; font-size: 10.5px;
+      color: var(--text-2); background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px;
+    }
+    .det-head .spacer { flex: 1; }
+    .det-rules-link {
+      border: 1px solid var(--border-2); background: var(--surface-2);
+      color: var(--text-2); font: inherit; font-size: 11px; font-weight: 600;
+      padding: 2px 9px; border-radius: 999px; cursor: pointer;
+      transition: all .15s; white-space: nowrap;
+    }
+    .det-rules-link:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-text); background: var(--accent-light); }
+    .det-rules-link:disabled { cursor: default; opacity: .55; }
+    .det-body { margin-top: 9px; }
+    .det-regex {
+      font-family: ui-monospace, monospace; font-size: 11.5px; line-height: 1.6;
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 11px;
+      overflow-x: auto; white-space: pre;
+      color: var(--text);
+    }
+    .det-regex .rx-m { color: var(--accent-text); font-weight: 600; }
+    .det-regex .rx-cls { color: var(--high); }
+    .det-regex .rx-q { color: var(--medium); font-weight: 600; }
+    .det-regex .rx-esc { color: var(--low); }
+    .det-desc { font-size: 12px; color: var(--text-2); line-height: 1.55; font-style: italic; }
+    .det-empty { color: var(--text-2); font-size: 13px; padding: 30px 0; text-align: center; }
+
+    /* Flash da linha de regra alvo do cross-reference detector → regras */
+    @keyframes rule-flash-kf {
+      0%, 60% { background: var(--accent-light); }
+      100% { background: transparent; }
+    }
+    tr.rule-flash td { animation: rule-flash-kf 2.2s ease-out; }
+
     /* ── Modal ───────────────────────────────────────────────────────────────── */
     .modal-overlay {
       position: fixed; inset: 0;
@@ -1184,19 +1278,100 @@
           <div>
             <h1 class="page-title">Policies</h1>
             <p style="color:var(--text-2);font-size:13px;margin-top:4px">
-              Built-in rules are configured via
-              <code style="font-family:ui-monospace,monospace;font-size:11px;background:var(--surface-2);padding:2px 6px;border-radius:4px;color:var(--text);border:1px solid var(--border)">claude-guardian.config.json</code>.
-              Custom rules take effect immediately.
+              Edite ação, severidade e status direto na tabela — as mudanças valem
+              na hora para o daemon e são persistidas no
+              <code style="font-family:ui-monospace,monospace;font-size:11px;background:var(--surface-2);padding:2px 6px;border-radius:4px;color:var(--text);border:1px solid var(--border)">claude-guardian.config.json</code>
+              (os hooks releem a cada execução).
             </p>
           </div>
           <button class="btn primary" onclick="openRuleModal()">+ Nova Regra</button>
         </div>
+
+        <div class="subtabs" role="tablist">
+          <button class="subtab active" id="subtab-btn-rules" onclick="showPoliciesSubTab('rules')">Regras</button>
+          <button class="subtab" id="subtab-btn-detectors" onclick="showPoliciesSubTab('detectors')">
+            Detectores <span class="count-pill" id="detectors-count" style="display:none"></span>
+          </button>
+        </div>
+
+        <div id="policies-sub-rules">
         <div class="card">
           <div class="table-wrap">
             <table>
               <thead><tr><th>ID</th><th>Name</th><th>Detector / Regex</th><th>Min Severity</th><th>Action</th><th>Enabled</th><th></th></tr></thead>
               <tbody id="policies-table"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <div style="margin-bottom:12px">
+            <h2 style="font-size:15px">Allowlist — exce&ccedil;&otilde;es</h2>
+            <p style="color:var(--text-2);font-size:12.5px;margin-top:2px">
+              Valores que os detectores devem ignorar (substring ou regex).
+              Vale para todas as superf&iacute;cies: hooks, extens&atilde;o e gateways.
+            </p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <input id="al-pattern" class="filter-input" style="flex:2;min-width:200px" placeholder="valor exato ou regex&hellip;" />
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-2)">
+              <input type="checkbox" id="al-regex"> regex
+            </label>
+            <input id="al-reason" class="filter-input" style="flex:2;min-width:180px" placeholder="motivo (fica no audit)" />
+            <button class="btn primary" onclick="addAllowlistEntry()">Adicionar</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pattern</th><th>Tipo</th><th>Motivo</th><th>Expira</th><th></th></tr></thead>
+              <tbody id="allowlist-table"><tr><td colspan="5" class="empty">Loading&hellip;</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <h2 style="font-size:15px;margin-bottom:2px">Detec&ccedil;&atilde;o de entidades (nomes/endere&ccedil;os)</h2>
+          <p style="color:var(--text-2);font-size:12.5px;margin-bottom:12px">
+            Detector heur&iacute;stico de PII n&atilde;o estruturada. Stopwords nunca s&atilde;o
+            tratadas como nome de pessoa &mdash; use para eliminar falsos positivos do
+            vocabul&aacute;rio da sua organiza&ccedil;&atilde;o (ex.: nomes de produto, siglas internas).
+          </p>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
+            <input type="checkbox" id="set-entity" onchange="saveSettings({entityDetection:this.checked})">
+            habilitar detec&ccedil;&atilde;o de nomes e endere&ccedil;os
+          </label>
+          <input id="stopword-input" class="filter-input" style="min-width:240px" placeholder="nova stopword &mdash; Enter para adicionar" onkeydown="stopwordKeydown(event)" />
+          <div id="stopword-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"></div>
+        </div>
+
+        <div class="card" style="margin-top:20px">
+          <h2 style="font-size:15px;margin-bottom:2px">Modelos bloqueados no navegador</h2>
+          <p style="color:var(--text-2);font-size:12.5px;margin-bottom:12px">
+            Envios pela extens&atilde;o de navegador cujo modelo casar com um destes
+            padr&otilde;es (substring, case-insensitive) s&atilde;o <strong>bloqueados</strong> &mdash;
+            ex.: <code style="font-family:ui-monospace,monospace;font-size:11px">fable</code>
+            bloqueia <code style="font-family:ui-monospace,monospace;font-size:11px">claude-fable-5</code>
+            em claude.ai, ChatGPT, Mistral etc.
+          </p>
+          <input id="blocked-model-input" class="filter-input" style="min-width:240px" placeholder="padr&atilde;o de modelo &mdash; Enter para adicionar" onkeydown="blockedModelKeydown(event)" />
+          <div id="blocked-model-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"></div>
+        </div>
+        </div><!-- /policies-sub-rules -->
+
+        <div id="policies-sub-detectors" style="display:none">
+          <div class="card">
+            <div style="margin-bottom:14px">
+              <h2 style="font-size:15px">Cat&aacute;logo de detectores</h2>
+              <p style="color:var(--text-2);font-size:12.5px;margin-top:2px">
+                Tudo que o engine sabe detectar, com a <strong>regex real</strong> que roda no scan
+                (extra&iacute;da da pr&oacute;pria constante do detector &mdash; nunca diverge do runtime).
+                Detectores heur&iacute;sticos e externos mostram o crit&eacute;rio no lugar do pattern.
+              </p>
+            </div>
+            <div class="det-toolbar">
+              <input id="det-search" class="filter-input" style="flex:1;min-width:220px" placeholder="buscar por id, nome, dataType ou regex&hellip;" oninput="renderDetectors()" />
+              <div id="det-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            </div>
+            <div id="detectors-list"><div class="det-empty">Loading&hellip;</div></div>
           </div>
         </div>
       </div>
@@ -1381,7 +1556,7 @@ function showTab(name) {
   if (name === 'approvals') loadApprovals();
   if (name === 'fleet') loadFleet();
   if (name === 'audit') loadAudit();
-  if (name === 'policies') loadPolicies();
+  if (name === 'policies') { loadPolicies(); loadAllowlist(); loadSettings(); }
   if (name === 'overview') { loadMetrics(); loadRecentIncidents(); }
 }
 
@@ -2078,6 +2253,7 @@ async function verifyChain() {
 // ── Policies ───────────────────────────────────────────────────────────────
 
 let customDetectorMap = {};
+let policyRules = [];
 
 async function loadPolicies() {
   try {
@@ -2087,12 +2263,15 @@ async function loadPolicies() {
     ]);
     const rows = await polRes.json();
     const custRows = await custRes.json();
+    policyRules = rows;
     customDetectorMap = {};
     for (const c of custRows) customDetectorMap[c.id] = c;
 
     const tbody = document.getElementById('policies-table');
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">Nenhuma policy configurada</td></tr>'; return; }
 
+    const ACTIONS = ['allow', 'block', 'require-approval', 'redact', 'substitute'];
+    const SEVS = ['', 'low', 'medium', 'high', 'critical'];
     tbody.innerHTML = rows.map(r => {
       const isCustom = r.detectorIds && r.detectorIds.length > 0 && r.detectorIds[0].startsWith('custom-');
       const custDet = isCustom ? customDetectorMap[r.detectorIds[0]] : null;
@@ -2102,17 +2281,354 @@ async function loadPolicies() {
       const deleteBtn = isCustom
         ? `<button class="btn" style="color:var(--critical);border-color:var(--critical-border);font-size:11px" onclick="deleteCustomRule('${r.detectorIds[0]}','${r.id}')">✕</button>`
         : '';
-      return `<tr>
+      const sevSelect = `<select class="filter-select" style="font-size:12px" onchange="patchPolicy('${escHtml(r.id)}',{minSeverity:this.value||null})">${
+        SEVS.map(s => `<option value="${s}" ${((r.minSeverity||'')===s)?'selected':''}>${s||'qualquer'}</option>`).join('')}</select>`;
+      const actionSelect = `<select class="filter-select" style="font-size:12px" onchange="patchPolicy('${escHtml(r.id)}',{action:this.value})">${
+        ACTIONS.map(a => `<option value="${a}" ${(r.action===a)?'selected':''}>${a}</option>`).join('')}</select>`;
+      const enabledToggle = `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+        <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="patchPolicy('${escHtml(r.id)}',{enabled:this.checked})">
+        ${r.enabled ? badge('enabled','approved') : badge('disabled','denied')}</label>`;
+      return `<tr id="policy-row-${escHtml(r.id)}">
         <td class="mono" style="font-size:11px">${escHtml(r.id)}${isCustom ? '<span class="custom-badge">custom</span>' : ''}</td>
         <td>${escHtml(r.name)}</td>
         <td style="max-width:260px">${detectorCell}</td>
-        <td>${r.minSeverity ? severityBadge(r.minSeverity) : '—'}</td>
-        <td>${actionBadge(r.action)}</td>
-        <td>${r.enabled ? badge('enabled','approved') : badge('disabled','denied')}</td>
+        <td>${sevSelect}</td>
+        <td>${actionSelect}</td>
+        <td>${enabledToggle}</td>
         <td>${deleteBtn}</td>
       </tr>`;
     }).join('');
   } catch {}
+}
+
+async function patchPolicy(id, patch) {
+  try {
+    const res = await apiFetch(`/api/policies/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast(e.error || 'Erro ao atualizar política', false);
+    } else {
+      toast('Política atualizada — já em vigor');
+    }
+  } catch (e) { toast(String(e), false); }
+  loadPolicies();
+}
+
+// ── Catálogo de detectores (sub-aba Detectores) ────────────────────────────
+
+let detectorCatalog = [];
+let detectorFilter = 'all';
+
+function showPoliciesSubTab(name) {
+  document.getElementById('policies-sub-rules').style.display = name === 'rules' ? '' : 'none';
+  document.getElementById('policies-sub-detectors').style.display = name === 'detectors' ? '' : 'none';
+  document.getElementById('subtab-btn-rules').classList.toggle('active', name === 'rules');
+  document.getElementById('subtab-btn-detectors').classList.toggle('active', name === 'detectors');
+  // Recarrega a cada abertura: pega regra/custom criada ou editada na outra
+  // sub-aba sem exigir refresh (API local, custo desprezível).
+  if (name === 'detectors') loadDetectors();
+}
+
+// PII por dataType; o resto do kind=regex é Secret.
+const PII_TYPES = new Set(['email','credit-card','ssn','cpf','cnpj','iban','phone-us','phone-br','phone-jp','private-ip','person-name','postal-address']);
+
+const DET_CATEGORIES = [
+  { key: 'secrets',   title: 'Secrets & Credenciais' },
+  { key: 'pii',       title: 'PII — Dados Pessoais' },
+  { key: 'custom',    title: 'Regras Custom' },
+  { key: 'heuristic', title: 'Heurísticos' },
+  { key: 'external',  title: 'Externos' },
+];
+
+function detectorCategory(d) {
+  if (d.kind === 'custom') return 'custom';
+  if (d.kind === 'heuristic') return 'heuristic';
+  if (d.kind === 'external') return 'external';
+  return PII_TYPES.has(d.dataType) ? 'pii' : 'secrets';
+}
+
+// Mesma semântica do ruleMatches do engine (src/lib/policy.ts), aplicada ao
+// detector: regra sem dataTypes/detectorIds casa com tudo; minSeverity compara
+// contra a severidade do detector.
+const SEV_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
+function rulesForDetector(d) {
+  return policyRules.filter(r => {
+    if (r.dataTypes && !r.dataTypes.includes(d.dataType)) return false;
+    if (r.detectorIds && !r.detectorIds.includes(d.id)) return false;
+    if (r.minSeverity && (SEV_ORDER[d.severity] || 0) < (SEV_ORDER[r.minSeverity] || 0)) return false;
+    return true;
+  });
+}
+
+// Highlight leve de regex: só diferencia metacaracteres de literais, char a
+// char (não é um parser). Escapa o HTML ANTES de tokenizar.
+function highlightRegex(src) {
+  let out = '';
+  let i = 0;
+  const esc = (s) => escHtml(s);
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '\\' && i + 1 < src.length) {
+      out += `<span class="rx-esc">${esc(src.slice(i, i + 2))}</span>`;
+      i += 2;
+    } else if (c === '[') {
+      // classe de caracteres inteira (respeita \] escapado)
+      let j = i + 1;
+      while (j < src.length && !(src[j] === ']' && src[j - 1] !== '\\')) j++;
+      out += `<span class="rx-cls">${esc(src.slice(i, j + 1))}</span>`;
+      i = j + 1;
+    } else if (c === '{') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== '}') j++;
+      out += `<span class="rx-q">${esc(src.slice(i, j + 1))}</span>`;
+      i = j + 1;
+    } else if (c === '*' || c === '+' || c === '?') {
+      out += `<span class="rx-q">${esc(c)}</span>`;
+      i++;
+    } else if ('()|^$.'.includes(c)) {
+      out += `<span class="rx-m">${esc(c)}</span>`;
+      i++;
+    } else {
+      out += esc(c);
+      i++;
+    }
+  }
+  return out;
+}
+
+async function loadDetectors() {
+  try {
+    const res = await apiFetch('/api/detectors');
+    detectorCatalog = await res.json();
+    const pill = document.getElementById('detectors-count');
+    pill.textContent = detectorCatalog.length;
+    pill.style.display = '';
+    renderDetectorChips();
+    renderDetectors();
+  } catch {
+    document.getElementById('detectors-list').innerHTML =
+      '<div class="det-empty">Erro ao carregar o catálogo de detectores.</div>';
+  }
+}
+
+function renderDetectorChips() {
+  const counts = {};
+  for (const d of detectorCatalog) {
+    const c = detectorCategory(d);
+    counts[c] = (counts[c] || 0) + 1;
+  }
+  const chips = [`<button class="det-chip ${detectorFilter === 'all' ? 'active' : ''}" onclick="setDetectorFilter('all')">todos (${detectorCatalog.length})</button>`];
+  for (const cat of DET_CATEGORIES) {
+    if (!counts[cat.key]) continue;
+    chips.push(`<button class="det-chip ${detectorFilter === cat.key ? 'active' : ''}" onclick="setDetectorFilter('${cat.key}')">${cat.title.split(' ')[0].toLowerCase()} (${counts[cat.key]})</button>`);
+  }
+  document.getElementById('det-chips').innerHTML = chips.join('');
+}
+
+function setDetectorFilter(key) {
+  detectorFilter = key;
+  renderDetectorChips();
+  renderDetectors();
+}
+
+function detectorCard(d) {
+  const rules = rulesForDetector(d);
+  const ruleIds = rules.map(r => r.id);
+  // Atributo single-quoted: HTML-encoda também o ' para impedir breakout via
+  // id de regra (o &#39; volta a ser ' dentro da string JSON — inofensivo).
+  const idsAttr = escHtml(JSON.stringify(ruleIds)).replace(/'/g, '&#39;');
+  const rulesBtn = `<button class="det-rules-link" ${rules.length ? '' : 'disabled'}
+    title="${rules.length ? 'Ver as regras que usam este detector' : 'Nenhuma regra referencia este detector'}"
+    onclick='gotoDetectorRules(${idsAttr})'>${rules.length} regra${rules.length === 1 ? '' : 's'}</button>`;
+  const body = (d.pattern !== undefined && d.pattern !== null)
+    ? `<div class="det-regex">${highlightRegex(String(d.pattern))}</div>${d.description ? `<div class="det-desc" style="margin-top:6px">${escHtml(d.description)}</div>` : ''}`
+    : `<div class="det-desc">${escHtml(d.description || 'Sem pattern estático — critério definido em código.')}</div>`;
+  return `<div class="det-card ${d.active === false ? 'inactive' : ''}">
+    <div class="det-head">
+      <span class="det-name">${escHtml(d.label)}</span>
+      <span class="det-id">${escHtml(d.id)}</span>
+      ${badge(escHtml(d.severity), escHtml(d.severity))}
+      ${badge(escHtml(d.dataType), 'info')}
+      ${d.kind && d.kind !== 'regex' ? `<span class="custom-badge">${escHtml(d.kind)}</span>` : ''}
+      ${d.active === false ? badge('inativo', 'denied') : ''}
+      <span class="spacer"></span>
+      ${rulesBtn}
+    </div>
+    <div class="det-body">${body}</div>
+  </div>`;
+}
+
+function renderDetectors() {
+  const list = document.getElementById('detectors-list');
+  const q = (document.getElementById('det-search').value || '').trim().toLowerCase();
+  const matches = detectorCatalog.filter(d => {
+    if (detectorFilter !== 'all' && detectorCategory(d) !== detectorFilter) return false;
+    if (!q) return true;
+    return [d.id, d.label, d.dataType, d.pattern || '', d.description || '']
+      .some(v => String(v).toLowerCase().includes(q));
+  });
+  if (!matches.length) {
+    list.innerHTML = '<div class="det-empty">Nenhum detector corresponde à busca.</div>';
+    return;
+  }
+  const html = [];
+  for (const cat of DET_CATEGORIES) {
+    const group = matches.filter(d => detectorCategory(d) === cat.key);
+    if (!group.length) continue;
+    html.push(`<div class="det-group-title">${cat.title} <span class="count-pill">${group.length}</span></div>`);
+    html.push(...group.map(detectorCard));
+  }
+  list.innerHTML = html.join('');
+}
+
+function gotoDetectorRules(ruleIds) {
+  showPoliciesSubTab('rules');
+  let first = true;
+  for (const id of ruleIds) {
+    const row = document.getElementById(`policy-row-${id}`);
+    if (!row) continue;
+    row.classList.remove('rule-flash');
+    void row.offsetWidth; // reinicia a animação se o usuário clicar de novo
+    row.classList.add('rule-flash');
+    if (first) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); first = false; }
+  }
+}
+
+// ── Allowlist (exceções) ────────────────────────────────────────────────────
+
+async function loadAllowlist() {
+  try {
+    const res = await apiFetch('/api/allowlist');
+    const rows = await res.json();
+    const tbody = document.getElementById('allowlist-table');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhuma exceção configurada</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(e => `<tr>
+      <td class="mono" style="font-size:11.5px;max-width:280px;overflow:hidden;text-overflow:ellipsis" title="${escHtml(e.pattern)}">${escHtml(e.pattern)}</td>
+      <td>${e.isRegex ? badge('regex','info') : badge('substring','info')}</td>
+      <td style="font-size:12.5px">${escHtml(e.reason || '—')}</td>
+      <td style="font-size:12px">${e.expiresAt ? escHtml(e.expiresAt) : '—'}</td>
+      <td><button class="btn" style="color:var(--critical);border-color:var(--critical-border);font-size:11px" onclick="deleteAllowlistEntry('${escHtml(e.id)}')">✕</button></td>
+    </tr>`).join('');
+  } catch {}
+}
+
+async function addAllowlistEntry() {
+  const pattern = document.getElementById('al-pattern').value.trim();
+  const isRegex = document.getElementById('al-regex').checked;
+  const reason = document.getElementById('al-reason').value.trim();
+  if (!pattern) { toast('Informe o pattern da exceção', false); return; }
+  try {
+    const res = await apiFetch('/api/allowlist', {
+      method: 'POST',
+      body: JSON.stringify({ pattern, isRegex, reason }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { toast(data.error || 'Erro ao criar exceção', false); return; }
+    document.getElementById('al-pattern').value = '';
+    document.getElementById('al-reason').value = '';
+    document.getElementById('al-regex').checked = false;
+    toast('Exceção criada — já em vigor');
+    loadAllowlist();
+  } catch (e) { toast(String(e), false); }
+}
+
+async function deleteAllowlistEntry(id) {
+  if (!confirm('Remover esta exceção? Os valores voltam a ser detectados.')) return;
+  try {
+    const res = await apiFetch(`/api/allowlist/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (res.ok) { toast('Exceção removida'); loadAllowlist(); }
+    else { const e = await res.json().catch(() => ({})); toast(e.error || 'Erro ao remover', false); }
+  } catch (e) { toast(String(e), false); }
+}
+
+// ── Settings do engine (detecção de entidades) ──────────────────────────────
+
+let currentStopwords = [];
+
+async function loadSettings() {
+  try {
+    const res = await apiFetch('/api/settings');
+    const s = await res.json();
+    document.getElementById('set-entity').checked = !!s.entityDetection;
+    currentStopwords = Array.isArray(s.entityStopwords) ? s.entityStopwords : [];
+    renderStopwords();
+    currentBlockedModels = Array.isArray(s.blockedWebModels) ? s.blockedWebModels : [];
+    renderBlockedModels();
+  } catch {}
+}
+
+function renderStopwords() {
+  const el = document.getElementById('stopword-chips');
+  el.innerHTML = currentStopwords.length
+    ? currentStopwords.map((w, i) =>
+        `<span class="chip">${escHtml(w)}<button class="chip-del" onclick="removeStopword(${i})">×</button></span>`,
+      ).join('')
+    : '<span style="color:var(--text-2);font-size:12px">nenhuma stopword custom — só a lista embutida de termos técnicos</span>';
+}
+
+function stopwordKeydown(ev) {
+  if (ev.key !== 'Enter') return;
+  ev.preventDefault();
+  const input = document.getElementById('stopword-input');
+  const w = input.value.trim().toLowerCase();
+  if (!w || currentStopwords.includes(w)) { input.value = ''; return; }
+  currentStopwords.push(w);
+  input.value = '';
+  saveSettings({ entityStopwords: currentStopwords });
+}
+
+function removeStopword(i) {
+  currentStopwords.splice(i, 1);
+  saveSettings({ entityStopwords: currentStopwords });
+}
+
+let currentBlockedModels = [];
+
+function renderBlockedModels() {
+  const el = document.getElementById('blocked-model-chips');
+  el.innerHTML = currentBlockedModels.length
+    ? currentBlockedModels.map((m, i) =>
+        `<span class="chip">${escHtml(m)}<button class="chip-del" onclick="removeBlockedModel(${i})">×</button></span>`,
+      ).join('')
+    : '<span style="color:var(--text-2);font-size:12px">nenhum modelo restrito — todos os modelos são permitidos no navegador</span>';
+}
+
+function blockedModelKeydown(ev) {
+  if (ev.key !== 'Enter') return;
+  ev.preventDefault();
+  const input = document.getElementById('blocked-model-input');
+  const m = input.value.trim().toLowerCase();
+  if (!m || currentBlockedModels.includes(m)) { input.value = ''; return; }
+  currentBlockedModels.push(m);
+  input.value = '';
+  saveSettings({ blockedWebModels: currentBlockedModels });
+}
+
+function removeBlockedModel(i) {
+  currentBlockedModels.splice(i, 1);
+  saveSettings({ blockedWebModels: currentBlockedModels });
+}
+
+async function saveSettings(patch) {
+  try {
+    const res = await apiFetch('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast(e.error || 'Erro ao salvar configuração', false);
+    } else {
+      toast('Configuração salva — já em vigor');
+    }
+  } catch (e) { toast(String(e), false); }
+  loadSettings();
 }
 
 async function deleteCustomRule(detectorId, ruleId) {

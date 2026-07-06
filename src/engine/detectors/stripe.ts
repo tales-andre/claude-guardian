@@ -11,6 +11,7 @@ export const stripeSecretKeyDetector: Detector = {
   label: "Stripe Secret Key",
   dataType: "stripe-key",
   severity: "critical",
+  pattern: SECRET_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SECRET_KEY_RE)) {
@@ -35,6 +36,7 @@ export const stripeRestrictedKeyDetector: Detector = {
   label: "Stripe Restricted Key",
   dataType: "stripe-key",
   severity: "high",
+  pattern: RESTRICTED_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(RESTRICTED_KEY_RE)) {
@@ -59,6 +61,7 @@ export const stripeWebhookSecretDetector: Detector = {
   label: "Stripe Webhook Signing Secret",
   dataType: "stripe-key",
   severity: "high",
+  pattern: WEBHOOK_SECRET_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(WEBHOOK_SECRET_RE)) {

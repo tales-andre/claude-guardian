@@ -50,6 +50,8 @@ const configSchema = z.object({
   centralApiKey: z.string().default(""),
   substitutionSalt: z.string().default(""),
   entityDetection: z.boolean().default(false),
+  entityStopwords: z.array(z.string()).default([]),
+  blockedWebModels: z.array(z.string()).default([]),
 });
 
 // Overrides de ambiente — permitem configurar o servidor em containers (Docker/
@@ -80,6 +82,13 @@ function applyEnvOverrides(config: Config): Config {
       env["GUARDIAN_ENTITY_DETECTION"] != null
         ? env["GUARDIAN_ENTITY_DETECTION"] === "true"
         : config.entityDetection,
+    blockedWebModels:
+      env["GUARDIAN_BLOCKED_WEB_MODELS"] != null
+        ? env["GUARDIAN_BLOCKED_WEB_MODELS"]
+            .split(",")
+            .map((m) => m.trim())
+            .filter(Boolean)
+        : config.blockedWebModels,
   };
 }
 
@@ -90,9 +99,13 @@ export function resolveConfigPath(): string {
 }
 
 export function saveConfig(config: Config, overridePath?: string): void {
-  const path = overridePath ?? resolveConfigPath();
+  // Persiste no arquivo de ORIGEM do config (configPath, setado pelo
+  // loadConfig) — nunca no config de outro CWD. configPath é metadado de
+  // runtime e fica fora do JSON.
+  const path = overridePath ?? config.configPath ?? resolveConfigPath();
+  const { configPath: _omit, ...serializable } = config;
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(config, null, 2), "utf8");
+  writeFileSync(path, JSON.stringify(serializable, null, 2), "utf8");
 }
 
 export function loadConfig(overridePath?: string): Config {
@@ -107,6 +120,7 @@ export function loadConfig(overridePath?: string): Config {
       ...parsed,
       dbPath: expandHome(parsed.dbPath),
       logFile: expandHome(parsed.logFile),
+      configPath: path,
     } as Config);
   } catch {
     return applyEnvOverrides(DEFAULT_CONFIG);

@@ -255,4 +255,24 @@ export interface Config {
    * superfícies de egress. Vazio/false = comportamento local inalterado.
    */
   entityDetection: boolean;
+  /**
+   * Stopwords extras do detector de nome (além da TECH_TERMS embutida):
+   * candidato com qualquer um destes tokens não é tratado como nome de
+   * pessoa. Gerenciável pelo dashboard (PATCH /api/settings) para matar
+   * falso positivo do vocabulário da organização sem mexer em código.
+   */
+  entityStopwords: string[];
+  /**
+   * Padrões de modelo BLOQUEADOS nos envios pela extensão de navegador
+   * (WebPrompt). Match por substring case-insensitive contra o campo `model`
+   * do request do site (ex.: "fable" bloqueia "claude-fable-5"). Vazio =
+   * nenhum modelo restrito (comportamento atual inalterado).
+   */
+  blockedWebModels: string[];
+  /**
+   * Caminho do arquivo de onde este config foi carregado. Preenchido pelo
+   * loadConfig e usado pelo saveConfig para persistir SEMPRE no mesmo
+   * arquivo (nunca no config de outro CWD). Não é serializado no JSON.
+   */
+  configPath?: string;
 }

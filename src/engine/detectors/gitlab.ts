@@ -11,6 +11,7 @@ export const gitlabPatDetector: Detector = {
   label: "GitLab Personal Access Token",
   dataType: "gitlab-token",
   severity: "high",
+  pattern: PAT_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PAT_RE)) {
@@ -35,6 +36,7 @@ export const gitlabCiJobTokenDetector: Detector = {
   label: "GitLab CI/CD Job Token",
   dataType: "gitlab-token",
   severity: "high",
+  pattern: CI_JOB_TOKEN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(CI_JOB_TOKEN_RE)) {
@@ -59,6 +61,7 @@ export const gitlabRunnerTokenDetector: Detector = {
   label: "GitLab Runner Registration Token",
   dataType: "gitlab-token",
   severity: "high",
+  pattern: RUNNER_TOKEN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(RUNNER_TOKEN_RE)) {

@@ -6,6 +6,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import Fastify from "fastify";
 import { saveConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
+import { ASYNC_DETECTORS } from "../engine/detectors/async.ts";
+import { entityDetectors } from "../engine/detectors/entity.ts";
+import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
+import { BUILT_IN_DETECTORS } from "../engine/detectors/index.ts";
+import type { Detector } from "../engine/detectors/types.ts";
 import { buildScope } from "../lib/approval.ts";
 import { computeMachineStatus } from "../lib/fleet.ts";
 import {
@@ -16,12 +21,14 @@ import { generateRegex } from "../lib/regex-generator.ts";
 import { scanWeb, type WebScanRequest } from "../lib/web-scan.ts";
 import type {
   AgentIngestPayload,
+  AllowlistEntry,
   ApprovalStatus,
   Config,
   ExtensionHeartbeat,
   MachineHeartbeatPayload,
   PolicyAction,
   PolicyRule,
+  Severity,
 } from "../types/index.ts";
 import { createStore } from "./store.ts";
 
@@ -509,6 +516,50 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
     },
   );
 
+  // ── Catálogo de detectores ─────────────────────────────────────────────────
+  // Visão read-only de TUDO que o engine sabe detectar: built-ins (pattern vem
+  // do `.source` da regex real que o scan executa — nunca uma cópia manual),
+  // heurísticos (entity, sempre listados mesmo desligados, com `active`
+  // refletindo config.entityDetection), async-only (base64), o wrapper externo
+  // do gitleaks e as regras custom criadas pelo dashboard.
+  function detectorView(d: Detector, active: boolean) {
+    return {
+      id: d.id,
+      label: d.label,
+      dataType: d.dataType,
+      severity: d.severity,
+      kind: d.kind ?? "regex",
+      ...(d.pattern !== undefined && { pattern: d.pattern }),
+      ...(d.description !== undefined && { description: d.description }),
+      active,
+    };
+  }
+
+  fastify.get("/api/detectors", async (_req, reply) => {
+    let custom: Awaited<ReturnType<typeof store.listCustomDetectors>> = [];
+    try {
+      custom = await store.listCustomDetectors();
+    } catch {
+      custom = [];
+    }
+    void reply.send([
+      ...BUILT_IN_DETECTORS.map((d) => detectorView(d, true)),
+      ...ASYNC_DETECTORS.map((d) => detectorView(d, true)),
+      ...entityDetectors.map((d) => detectorView(d, config.entityDetection)),
+      detectorView(gitleaksDetector, true),
+      ...custom.map((c) => ({
+        id: c.id,
+        label: c.name,
+        dataType: "custom",
+        severity: c.severity,
+        kind: "custom",
+        pattern: c.regex,
+        ...(c.description && { description: c.description }),
+        active: true,
+      })),
+    ]);
+  });
+
   // ── Policies ───────────────────────────────────────────────────────────────
   fastify.get("/api/policies", (_req, reply) => {
     void reply.send(config.policies);
@@ -645,6 +696,238 @@ export async function buildServer(config: Config): Promise<FastifyInstance> {
       }
 
       void reply.status(204).send();
+    },
+  );
+
+  // ── Administração de regras pelo dashboard ────────────────────────────────
+  // Controle total sem editar arquivo: políticas (enable/action/minSeverity),
+  // allowlist (exceções) e knobs do engine. Mutação no MESMO objeto config em
+  // memória (efeito imediato no scan do daemon) + saveConfig no arquivo de
+  // origem (hooks releem do disco a cada execução). Todas atrás do token do
+  // dashboard (auth middleware acima).
+  const POLICY_ACTIONS = new Set([
+    "allow",
+    "block",
+    "require-approval",
+    "redact",
+    "substitute",
+  ]);
+  const SEVERITIES = new Set(["critical", "high", "medium", "low"]);
+
+  fastify.patch(
+    "/api/policies/:id",
+    (
+      req: FastifyRequest<{
+        Params: { id: string };
+        Body: { enabled?: unknown; action?: unknown; minSeverity?: unknown };
+      }>,
+      reply,
+    ) => {
+      const rule = config.policies.find((p) => p.id === req.params.id);
+      if (!rule) {
+        return void reply
+          .status(404)
+          .send({ error: "Política não encontrada" });
+      }
+      const { enabled, action, minSeverity } = req.body ?? {};
+      if (enabled !== undefined && typeof enabled !== "boolean") {
+        return void reply
+          .status(400)
+          .send({ error: "enabled deve ser boolean" });
+      }
+      if (
+        action !== undefined &&
+        !(typeof action === "string" && POLICY_ACTIONS.has(action))
+      ) {
+        return void reply.status(400).send({ error: "action inválida" });
+      }
+      if (
+        minSeverity !== undefined &&
+        minSeverity !== null &&
+        !(typeof minSeverity === "string" && SEVERITIES.has(minSeverity))
+      ) {
+        return void reply.status(400).send({ error: "minSeverity inválida" });
+      }
+      if (enabled !== undefined) rule.enabled = enabled;
+      if (action !== undefined) rule.action = action as PolicyAction;
+      // null limpa o filtro (regra volta a valer para qualquer severidade).
+      if (minSeverity === null) delete rule.minSeverity;
+      else if (minSeverity !== undefined)
+        rule.minSeverity = minSeverity as Severity;
+      try {
+        saveConfig(config);
+      } catch {
+        // Non-fatal — a mudança vale em memória mesmo se a escrita falhar.
+      }
+      void reply.send(rule);
+    },
+  );
+
+  fastify.get("/api/allowlist", (_req, reply) => {
+    void reply.send(config.allowlist);
+  });
+
+  fastify.post(
+    "/api/allowlist",
+    (
+      req: FastifyRequest<{
+        Body: {
+          pattern?: unknown;
+          isRegex?: unknown;
+          detectorIds?: unknown;
+          reason?: unknown;
+          expiresAt?: unknown;
+        };
+      }>,
+      reply,
+    ) => {
+      const b = req.body ?? {};
+      if (typeof b.pattern !== "string" || !b.pattern) {
+        return void reply.status(400).send({ error: "pattern é obrigatório" });
+      }
+      const isRegex = b.isRegex === true;
+      if (isRegex) {
+        try {
+          new RegExp(b.pattern);
+        } catch (e) {
+          return void reply
+            .status(400)
+            .send({ error: `Regex inválida: ${String(e)}` });
+        }
+      }
+      const detectorIds = Array.isArray(b.detectorIds)
+        ? b.detectorIds.filter((d): d is string => typeof d === "string")
+        : [];
+      const entry: AllowlistEntry = {
+        id: `allow-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`,
+        pattern: b.pattern,
+        isRegex,
+        reason: typeof b.reason === "string" ? b.reason : "",
+        ...(detectorIds.length ? { detectorIds } : {}),
+        ...(typeof b.expiresAt === "string" && b.expiresAt
+          ? { expiresAt: b.expiresAt }
+          : {}),
+      };
+      config.allowlist.push(entry);
+      try {
+        saveConfig(config);
+      } catch {
+        // Non-fatal
+      }
+      void reply.status(201).send(entry);
+    },
+  );
+
+  fastify.delete(
+    "/api/allowlist/:id",
+    (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+      const idx = config.allowlist.findIndex((e) => e.id === req.params.id);
+      if (idx === -1) {
+        return void reply.status(404).send({ error: "Not found" });
+      }
+      config.allowlist.splice(idx, 1);
+      try {
+        saveConfig(config);
+      } catch {
+        // Non-fatal
+      }
+      void reply.send({ success: true });
+    },
+  );
+
+  // Knobs do engine expostos ao dashboard — NUNCA inclui segredos (salt,
+  // chaves, token): o GET é consumido pela UI e não pode vazá-los.
+  function settingsView() {
+    return {
+      entityDetection: config.entityDetection,
+      entityStopwords: config.entityStopwords,
+      engineTimeoutMs: config.engineTimeoutMs,
+      blockedWebModels: config.blockedWebModels,
+    };
+  }
+
+  fastify.get("/api/settings", (_req, reply) => {
+    void reply.send(settingsView());
+  });
+
+  fastify.patch(
+    "/api/settings",
+    (
+      req: FastifyRequest<{
+        Body: {
+          entityDetection?: unknown;
+          entityStopwords?: unknown;
+          engineTimeoutMs?: unknown;
+          blockedWebModels?: unknown;
+        };
+      }>,
+      reply,
+    ) => {
+      const b = req.body ?? {};
+      if (
+        b.entityDetection !== undefined &&
+        typeof b.entityDetection !== "boolean"
+      ) {
+        return void reply
+          .status(400)
+          .send({ error: "entityDetection deve ser boolean" });
+      }
+      if (
+        b.entityStopwords !== undefined &&
+        !(
+          Array.isArray(b.entityStopwords) &&
+          b.entityStopwords.every((w) => typeof w === "string")
+        )
+      ) {
+        return void reply
+          .status(400)
+          .send({ error: "entityStopwords deve ser array de strings" });
+      }
+      if (
+        b.engineTimeoutMs !== undefined &&
+        !(
+          typeof b.engineTimeoutMs === "number" &&
+          Number.isInteger(b.engineTimeoutMs) &&
+          b.engineTimeoutMs > 0
+        )
+      ) {
+        return void reply
+          .status(400)
+          .send({ error: "engineTimeoutMs deve ser inteiro positivo" });
+      }
+      if (
+        b.blockedWebModels !== undefined &&
+        !(
+          Array.isArray(b.blockedWebModels) &&
+          b.blockedWebModels.every((m) => typeof m === "string")
+        )
+      ) {
+        return void reply
+          .status(400)
+          .send({ error: "blockedWebModels deve ser array de strings" });
+      }
+      if (b.entityDetection !== undefined) {
+        config.entityDetection = b.entityDetection;
+      }
+      if (b.entityStopwords !== undefined) {
+        config.entityStopwords = (b.entityStopwords as string[])
+          .map((w) => w.trim().toLowerCase())
+          .filter(Boolean);
+      }
+      if (b.engineTimeoutMs !== undefined) {
+        config.engineTimeoutMs = b.engineTimeoutMs;
+      }
+      if (b.blockedWebModels !== undefined) {
+        config.blockedWebModels = (b.blockedWebModels as string[])
+          .map((m) => m.trim())
+          .filter(Boolean);
+      }
+      try {
+        saveConfig(config);
+      } catch {
+        // Non-fatal
+      }
+      void reply.send(settingsView());
     },
   );
 

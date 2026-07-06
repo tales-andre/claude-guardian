@@ -15,6 +15,7 @@ export const connectionStringDetector: Detector = {
   label: "Database / Service Connection String",
   dataType: "connection-string",
   severity: "critical",
+  pattern: CONN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(CONN_RE)) {
@@ -40,6 +41,7 @@ export const dsnPasswordDetector: Detector = {
   label: "DSN Password Parameter",
   dataType: "connection-string",
   severity: "high",
+  pattern: DSN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(DSN_RE)) {

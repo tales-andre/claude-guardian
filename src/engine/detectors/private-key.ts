@@ -11,6 +11,7 @@ export const privateKeyDetector: Detector = {
   label: "PEM Private Key",
   dataType: "private-key",
   severity: "critical",
+  pattern: PEM_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PEM_RE)) {

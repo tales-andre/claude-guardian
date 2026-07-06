@@ -11,6 +11,7 @@ export const jwtDetector: Detector = {
   label: "JSON Web Token (JWT)",
   dataType: "jwt",
   severity: "high",
+  pattern: JWT_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(JWT_RE)) {

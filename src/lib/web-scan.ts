@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type BetterSqlite3 from "better-sqlite3";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
-import { entityDetectors } from "../engine/detectors/entity.ts";
+import { buildEntityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import type { Detector } from "../engine/detectors/types.ts";
 import { scanSync } from "../engine/index.ts";
@@ -42,7 +42,7 @@ export interface WebScanFile {
 export interface WebScanRequest {
   text?: string;
   files?: WebScanFile[];
-  context?: { url?: string; tabTitle?: string };
+  context?: { url?: string; tabTitle?: string; model?: string };
 }
 
 export interface WebScanFinding {
@@ -140,10 +140,57 @@ export function scanWeb(
   const files = req.files ?? [];
   const sessionId = req.context?.url ?? "web";
 
+  // ── Restrição de modelo (governança, não vazamento) ───────────────────────
+  // Antes de qualquer scan de conteúdo: se o site declarou o modelo no corpo
+  // do envio (adapter.extractModel na extensão) e ele casa com um padrão de
+  // config.blockedWebModels (substring, case-insensitive), o envio é BLOQUEADO
+  // independente do texto. Lista vazia = comportamento inalterado.
+  const model = req.context?.model?.trim() ?? "";
+  if (model && config.blockedWebModels.length > 0) {
+    const lower = model.toLowerCase();
+    const matched = config.blockedWebModels.find(
+      (p) => p.trim() && lower.includes(p.trim().toLowerCase()),
+    );
+    if (matched) {
+      const finding: DetectorFinding = {
+        detectorId: "blocked-model",
+        label: "Restricted model (policy)",
+        dataType: "blocked-model",
+        severity: "high",
+        snippet: model,
+        rawValue: model,
+        position: { start: 0, end: model.length },
+        confidence: 1,
+      };
+      const incident = recordIncident(
+        db,
+        WEB_PROMPT_TOOL,
+        sessionId,
+        [finding],
+        "block",
+      );
+      appendAuditEntry(db, "block", {
+        incidentId: incident.id,
+        tool: WEB_PROMPT_TOOL,
+        dataTypes: incident.dataTypes,
+        model,
+        blockedBy: matched,
+      });
+      reportToCentral(config, incident, [finding], null, "block");
+      return {
+        action: "block",
+        findings: [toWebFinding(finding)],
+        reason: `Modelo "${model}" bloqueado pela política da organização.`,
+      };
+    }
+  }
+
   const extraDetectors: Detector[] = [
     gitleaksDetector,
     ...loadCustomDetectors(db),
-    ...(config.entityDetection ? entityDetectors : []),
+    ...(config.entityDetection
+      ? buildEntityDetectors(config.entityStopwords)
+      : []),
   ];
 
   // ── Scan do texto do prompt (WebPrompt) ───────────────────────────────────

@@ -11,6 +11,7 @@ export const emailDetector: Detector = {
   label: "Email Address",
   dataType: "email",
   severity: "medium",
+  pattern: EMAIL_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(EMAIL_RE)) {

@@ -15,6 +15,7 @@ export const phoneUsDetector: Detector = {
   label: "US Phone Number",
   dataType: "phone-us",
   severity: "low",
+  pattern: US_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(US_RE)) {
@@ -39,6 +40,7 @@ export const phoneJpDetector: Detector = {
   label: "Japanese Phone Number",
   dataType: "phone-jp",
   severity: "low",
+  pattern: JP_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(JP_RE)) {
@@ -63,6 +65,7 @@ export const postalJpDetector: Detector = {
   label: "Japanese Postal Code",
   dataType: "phone-jp",
   severity: "low",
+  pattern: JP_POSTAL_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(JP_POSTAL_RE)) {

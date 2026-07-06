@@ -26,6 +26,7 @@ export const genericSecretDetector: Detector = {
   label: "Generic API Key / Secret",
   dataType: "generic-secret",
   severity: "medium",
+  pattern: GENERIC_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(GENERIC_RE)) {
@@ -51,6 +52,7 @@ export const envAssignmentDetector: Detector = {
   label: ".env-style secret assignment",
   dataType: "generic-secret",
   severity: "medium",
+  pattern: ENV_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(ENV_RE)) {
@@ -76,6 +78,7 @@ export const npmTokenDetector: Detector = {
   label: "npm Access Token",
   dataType: "npm-token",
   severity: "high",
+  pattern: NPM_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(NPM_RE)) {
@@ -100,6 +103,7 @@ export const sendgridKeyDetector: Detector = {
   label: "SendGrid API Key",
   dataType: "sendgrid-key",
   severity: "high",
+  pattern: SENDGRID_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SENDGRID_RE)) {
@@ -124,6 +128,7 @@ export const mailgunKeyDetector: Detector = {
   label: "Mailgun API Key",
   dataType: "generic-secret",
   severity: "high",
+  pattern: MAILGUN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(MAILGUN_RE)) {
@@ -141,6 +146,7 @@ export const mailchimpKeyDetector: Detector = {
   label: "Mailchimp API Key",
   dataType: "generic-secret",
   severity: "high",
+  pattern: MAILCHIMP_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(MAILCHIMP_RE)) {
@@ -158,6 +164,7 @@ export const twilioSidDetector: Detector = {
   label: "Twilio Account SID",
   dataType: "generic-secret",
   severity: "medium",
+  pattern: TWILIO_SID_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(TWILIO_SID_RE)) {
@@ -182,6 +189,7 @@ export const discordWebhookDetector: Detector = {
   label: "Discord Webhook URL",
   dataType: "generic-secret",
   severity: "high",
+  pattern: DISCORD_WEBHOOK_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(DISCORD_WEBHOOK_RE)) {
@@ -206,6 +214,7 @@ export const telegramBotTokenDetector: Detector = {
   label: "Telegram Bot Token",
   dataType: "generic-secret",
   severity: "high",
+  pattern: TELEGRAM_BOT_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(TELEGRAM_BOT_RE)) {

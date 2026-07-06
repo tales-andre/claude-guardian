@@ -133,6 +133,58 @@
   // travaria o overlay "solte arquivos aqui".
   const NETWORK_ENFORCED_DROP = /(^|\.)claude\.ai$/i;
 
+  // Hosts onde o PASTE de arquivos/imagens flui e o enforcement fica na REDE:
+  // o injected.js intercepta o upload resultante (FormData/File/Blob, anexo é
+  // fail-closed lá). Bloquear o paste na UI aqui só ENGOLIA a imagem — não há
+  // como re-injetar paste no claude.ai (ignora eventos não-confiáveis), e no
+  // Gemini a imagem colada vira upload que a camada de rede escaneia.
+  const NETWORK_ENFORCED_PASTE = /(^|\.)claude\.ai$|(^|\.)gemini\.google\.com$/i;
+
+  // Nomes que o daemon reprova por NOME mesmo sem conteúdo legível (espelha o
+  // BLOCKED_FILE_RE do scanWeb).
+  const SENSITIVE_NAME_RE =
+    /(^\.env($|\.)|\.(pem|key|pfx|p12|pkcs12|keystore|jks|ppk|asc|gpg)$|(^|\/|\\)id_(rsa|dsa|ecdsa|ed25519)$)/i;
+
+  // Só retemos o paste/drop quando o scan tem como REPROVAR algum arquivo:
+  // conteúdo de texto legível ou nome sensível. Imagem/binário de nome limpo
+  // FLUI — o daemon liberaria por nome de qualquer forma, e o upload real
+  // ainda é interceptado na rede (injected.js). Reter imagem aqui só engolia
+  // o anexo: nem todo site processa o re-despacho sintético (ex. anexos do
+  // Gemini ignoram drop não-confiável).
+  function scanCanReject(files) {
+    for (const f of files) {
+      const name = (f && f.name) || "";
+      if (TEXT_EXT_RE.test(name) || SENSITIVE_NAME_RE.test(name)) return true;
+    }
+    return false;
+  }
+
+  // Eventos sintéticos re-despachados por nós após o scan liberar: o handler
+  // de captura reconhece e deixa passar (senão o re-despacho cairia no mesmo
+  // block-first para sempre — era o loop do "re-arraste para anexar").
+  const guardianCleared = new WeakSet();
+
+  // Re-entrega ao site, no mesmo alvo, um paste/drop com os arquivos REAIS que
+  // o scan liberou (mesmo padrão do re-anexo via DataTransfer no handler de
+  // change). Sites que ignoram eventos não-confiáveis entram nas allowlists
+  // NETWORK_ENFORCED_* acima.
+  function redispatchCleared(target, type, files) {
+    try {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(f);
+      const evt =
+        type === "paste"
+          ? new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true })
+          : new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true });
+      guardianCleared.add(evt);
+      const el = target && target.dispatchEvent ? target : document.body || document;
+      el.dispatchEvent(evt);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // Ao bloquear um drop, paramos a propagação para o handler de drop do SITE
   // nunca ler os arquivos — mas é esse handler que esconde o overlay do site.
   // Reencenamos o fim do arraste (dragleave + drop + dragend) com DataTransfer
@@ -160,22 +212,40 @@
   document.addEventListener("drop", (e) => {
     const files = e.dataTransfer && e.dataTransfer.files;
     if (!(files && files.length)) return;
+    // Re-despacho nosso, já liberado pelo scan: deixa chegar ao site.
+    if (guardianCleared.has(e)) return;
     // Sites com enforcement na rede: deixa o drop fluir (overlay some sozinho).
     if (NETWORK_ENFORCED_DROP.test(location.hostname)) return;
+    // Imagem/binário de nome limpo: flui (o scan só olharia o nome).
+    if (!scanCanReject([...files])) return;
     blockEvent(e);
-    resetDropUI(e.target);
+    const target = e.target;
+    resetDropUI(target);
     inspectFiles([...files]).then((ok) => {
-      if (ok) console.info("[guardian] anexos liberados — re-arraste para anexar");
+      if (!ok) return;
+      if (!redispatchCleared(target, "drop", [...files])) {
+        console.info("[guardian] anexos liberados — re-arraste para anexar");
+      }
     });
   }, true);
 
   // Paste of files/images
   document.addEventListener("paste", (e) => {
-    const items = e.clipboardData && e.clipboardData.files;
-    if (items && items.length) {
-      blockEvent(e);
-      inspectFiles([...items]);
-    }
+    const files = e.clipboardData && e.clipboardData.files;
+    if (!(files && files.length)) return;
+    if (guardianCleared.has(e)) return;
+    // Sites com enforcement na rede: deixa o paste fluir (upload é escaneado lá).
+    if (NETWORK_ENFORCED_PASTE.test(location.hostname)) return;
+    // Imagem/binário de nome limpo: flui (o scan só olharia o nome).
+    if (!scanCanReject([...files])) return;
+    blockEvent(e);
+    const target = e.target;
+    inspectFiles([...files]).then((ok) => {
+      if (!ok) return;
+      if (!redispatchCleared(target, "paste", [...files])) {
+        console.info("[guardian] anexos liberados — cole novamente para anexar");
+      }
+    });
   }, true);
 
   // File input dialog

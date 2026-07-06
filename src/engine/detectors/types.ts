@@ -7,6 +7,17 @@ export interface Detector {
   label: string;
   dataType: DataType;
   severity: Severity;
+  /**
+   * Fonte da regex primária usada pelo scan (sempre `X_RE.source` da MESMA
+   * constante que o scan executa — nunca uma cópia manual, para o catálogo do
+   * dashboard nunca divergir do que roda). Ausente em detectores heurísticos
+   * ou externos.
+   */
+  pattern?: string;
+  /** Como o detector funciona; ausente = "regex". */
+  kind?: "regex" | "heuristic" | "external";
+  /** Descrição do critério para detectores sem pattern (heuristic/external). */
+  description?: string;
   scan(text: string): DetectorFinding[];
 }
 

@@ -1,6 +1,6 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
-import { entityDetectors } from "../engine/detectors/entity.ts";
+import { buildEntityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import type { Detector } from "../engine/detectors/types.ts";
 import { scanSync } from "../engine/index.ts";
@@ -99,7 +99,9 @@ export function scanMcp(
   const extraDetectors: Detector[] = [
     gitleaksDetector,
     ...loadCustomDetectors(db),
-    ...(config.entityDetection ? entityDetectors : []),
+    ...(config.entityDetection
+      ? buildEntityDetectors(config.entityStopwords)
+      : []),
   ];
 
   const res = scanSync(req.text, {

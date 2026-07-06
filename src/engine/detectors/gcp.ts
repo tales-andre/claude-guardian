@@ -12,6 +12,7 @@ export const gcpApiKeyDetector: Detector = {
   label: "Google Cloud API Key",
   dataType: "gcp-key",
   severity: "high",
+  pattern: GCP_API_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(GCP_API_KEY_RE)) {
@@ -29,6 +30,7 @@ export const gcpServiceAccountDetector: Detector = {
   label: "GCP Service Account JSON",
   dataType: "gcp-key",
   severity: "critical",
+  pattern: GCP_SERVICE_ACCOUNT_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(GCP_SERVICE_ACCOUNT_RE)) {

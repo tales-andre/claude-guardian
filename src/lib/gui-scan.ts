@@ -1,6 +1,6 @@
 import type BetterSqlite3 from "better-sqlite3";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
-import { entityDetectors } from "../engine/detectors/entity.ts";
+import { buildEntityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import type { Detector } from "../engine/detectors/types.ts";
 import { scanSync } from "../engine/index.ts";
@@ -152,7 +152,8 @@ export function scanGui(
     gitleaksDetector,
     ...loadCustomDetectors(db),
   ];
-  if (config.entityDetection) extraDetectors.push(...entityDetectors);
+  if (config.entityDetection)
+    extraDetectors.push(...buildEntityDetectors(config.entityStopwords));
   const { promptText, uploadText } = extractGuiText(req.bodyText);
 
   let promptFindings: DetectorFinding[] = [];

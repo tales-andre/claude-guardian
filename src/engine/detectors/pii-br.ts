@@ -16,6 +16,7 @@ export const cpfDetector: Detector = {
   label: "Brazilian CPF (Individual Taxpayer Registry)",
   dataType: "cpf",
   severity: "high",
+  pattern: CPF_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(CPF_RE)) {
@@ -42,6 +43,7 @@ export const cnpjDetector: Detector = {
   label: "Brazilian CNPJ (Corporate Taxpayer Registry)",
   dataType: "cnpj",
   severity: "high",
+  pattern: CNPJ_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(CNPJ_RE)) {
@@ -68,6 +70,7 @@ export const phoneBrDetector: Detector = {
   label: "Brazilian Phone Number",
   dataType: "phone-br",
   severity: "medium",
+  pattern: PHONE_BR_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PHONE_BR_RE)) {

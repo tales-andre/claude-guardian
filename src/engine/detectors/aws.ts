@@ -16,6 +16,7 @@ export const awsAccessKeyDetector: Detector = {
   label: "AWS Access Key ID",
   dataType: "aws-key",
   severity: "critical",
+  pattern: ACCESS_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(ACCESS_KEY_RE)) {
@@ -40,6 +41,7 @@ export const awsSecretKeyDetector: Detector = {
   label: "AWS Secret Access Key",
   dataType: "aws-key",
   severity: "critical",
+  pattern: SECRET_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SECRET_KEY_RE)) {

@@ -8,7 +8,7 @@ if (existsSync(join(process.cwd(), ".guardian-bypass"))) process.exit(0);
 import { loadConfig } from "../config/loader.ts";
 import { getDb } from "../db/client.ts";
 import { loadCustomDetectors } from "../engine/detectors/custom.ts";
-import { entityDetectors } from "../engine/detectors/entity.ts";
+import { buildEntityDetectors } from "../engine/detectors/entity.ts";
 import { gitleaksDetector } from "../engine/detectors/gitleaks.ts";
 import { scanSync } from "../engine/index.ts";
 import {
@@ -80,7 +80,9 @@ async function main(): Promise<void> {
     extraDetectors: [
       gitleaksDetector,
       ...customDetectors,
-      ...(config.entityDetection ? entityDetectors : []),
+      ...(config.entityDetection
+        ? buildEntityDetectors(config.entityStopwords)
+        : []),
     ],
   });
 

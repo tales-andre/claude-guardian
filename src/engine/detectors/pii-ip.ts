@@ -10,6 +10,7 @@ export const privateIpDetector: Detector = {
   label: "Private IPv4 Address (RFC-1918)",
   dataType: "private-ip",
   severity: "low",
+  pattern: PRIVATE_IP_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PRIVATE_IP_RE)) {

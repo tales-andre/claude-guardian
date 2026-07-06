@@ -11,6 +11,7 @@ export const githubPatDetector: Detector = {
   label: "GitHub Personal Access Token",
   dataType: "github-token",
   severity: "critical",
+  pattern: PAT_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PAT_RE)) {
@@ -35,6 +36,7 @@ export const githubFineGrainedDetector: Detector = {
   label: "GitHub Fine-Grained Token",
   dataType: "github-token",
   severity: "critical",
+  pattern: FINE_GRAINED_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(FINE_GRAINED_RE)) {
@@ -59,6 +61,7 @@ export const githubAppSecretDetector: Detector = {
   label: "GitHub App Installation Token",
   dataType: "github-token",
   severity: "critical",
+  pattern: APP_SECRET_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(APP_SECRET_RE)) {

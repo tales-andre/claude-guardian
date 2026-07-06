@@ -28,6 +28,9 @@ const meta: Omit<Detector, "scan"> = {
   label: "Secret embedded in base64",
   dataType: "generic-secret" as DataType,
   severity: "critical" as Severity,
+  pattern: BASE64_RE.source,
+  description:
+    "Decodifica blobs base64 (≥40 chars) e re-escaneia o conteúdo com os detectores de alta confiança (AWS, GitHub, chave privada, Anthropic). Async-only: roda no PostToolUse/central, fora do caminho síncrono de bloqueio.",
 };
 
 export const base64SecretDetector: Detector = {

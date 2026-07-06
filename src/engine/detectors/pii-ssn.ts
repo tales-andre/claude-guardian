@@ -11,6 +11,7 @@ export const ssnDetector: Detector = {
   label: "US Social Security Number",
   dataType: "ssn",
   severity: "high",
+  pattern: SSN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(SSN_RE)) {

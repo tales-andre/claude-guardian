@@ -41,6 +41,8 @@ export const DEFAULT_CONFIG: Config = {
   centralApiKey: "",
   substitutionSalt: "",
   entityDetection: false,
+  entityStopwords: [],
+  blockedWebModels: [],
   policies: [
     {
       id: "block-critical-secrets",

@@ -26,6 +26,7 @@ export const hexHighEntropyDetector: Detector = {
   label: "High-Entropy Hex String",
   dataType: "generic-secret",
   severity: "medium",
+  pattern: HEX_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(HEX_RE)) {
@@ -57,6 +58,7 @@ export const n8nApiKeyDetector: Detector = {
   label: "n8n API Key",
   dataType: "generic-secret",
   severity: "high",
+  pattern: N8N_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(N8N_RE)) {
@@ -81,6 +83,7 @@ export const embeddedKeyDetector: Detector = {
   label: "Service API Key (embedded format)",
   dataType: "generic-secret",
   severity: "medium",
+  pattern: EMBEDDED_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(EMBEDDED_KEY_RE)) {

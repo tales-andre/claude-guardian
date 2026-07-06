@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildEntityDetectors,
   personNameDetector,
   postalAddressDetector,
 } from "../src/engine/detectors/entity.ts";
@@ -129,6 +130,40 @@ describe("entity detectors", () => {
   it("ignora tokens comuns capitalizados (stoplist)", () => {
     const f = personNameDetector.scan("Segue Isso Aqui");
     expect(f).toHaveLength(0);
+  });
+
+  it("não marca termos técnicos Titlecase como nome (FP real: questão de certificação AWS)", () => {
+    const text =
+      "B. Transit Gateway sharing is useful for central network connectivity. " +
+      "Even so, AWS Network Manager helps with centralized visibility, and the " +
+      "security team keeps Route Tables and Network ACLs in the networking account.";
+    expect(personNameDetector.scan(text)).toHaveLength(0);
+  });
+
+  it("não marca bigrama Titlecase colado a sigla ALL-CAPS (nome de produto)", () => {
+    const f = personNameDetector.scan(
+      "habilite o AWS Fault Injection no ambiente de teste",
+    );
+    expect(f).toHaveLength(0);
+  });
+
+  it("buildEntityDetectors aceita stopwords customizadas (gerenciáveis pelo dash)", () => {
+    const texto = "apresentar ao Conselho Diretor amanhã";
+    const padrao = personNameDetector.scan(texto);
+    expect(padrao.length).toBeGreaterThan(0);
+    const [custom] = buildEntityDetectors(["conselho"]);
+    expect(custom?.scan(texto)).toHaveLength(0);
+    // Nomes reais seguem detectados com a stoplist custom ativa.
+    expect(
+      custom?.scan("agendar com Mariana Duarte").some((f) => f.rawValue === "Mariana Duarte"),
+    ).toBe(true);
+  });
+
+  it("continua detectando nome real mesmo perto de texto técnico", () => {
+    const f = personNameDetector.scan(
+      "O relatório do Transit Gateway foi revisado por Mariana Duarte ontem.",
+    );
+    expect(f.some((x) => x.rawValue === "Mariana Duarte")).toBe(true);
   });
 
   it("detecta endereço com logradouro e número", () => {

@@ -68,6 +68,14 @@
     return out;
   }
 
+  // Modelo declarado no corpo do envio (governança: config.blockedWebModels
+  // no daemon bloqueia modelos restritos — ex. "fable"). Os sites que expõem
+  // o modelo usam um campo `model` top-level no JSON; sites sem o campo
+  // retornam "" e a restrição simplesmente não se aplica a eles.
+  function modelFromJson(json) {
+    return json && typeof json.model === "string" ? json.model : "";
+  }
+
   // Generic "messages[].content" extractor shared by several providers.
   function textFromMessages(json) {
     if (!json) return "";
@@ -117,6 +125,9 @@
       // Formatos alternativos (retry/append via messages[]).
       if (parts.length === 0) return textFromMessages(json);
       return parts.join("\n");
+    },
+    extractModel(body) {
+      return modelFromJson(parseJson(body));
     },
     // Sinaliza que o envio carrega anexo → decide() aplica FAIL-CLOSED offline.
     carriesAttachment(body) {
@@ -171,6 +182,9 @@
           .join("\n");
       }
       return textFromMessages(json);
+    },
+    extractModel(body) {
+      return modelFromJson(parseJson(body));
     },
     // No safe in-place redaction (parts carry ids); fall back to block.
   };
@@ -248,6 +262,9 @@
       if (typeof json.content === "string") return json.content;
       return textFromMessages(json);
     },
+    extractModel(body) {
+      return modelFromJson(parseJson(body));
+    },
   };
 
   const mistralAdapter = {
@@ -262,6 +279,9 @@
       if (typeof json.message === "string") return json.message;
       if (typeof json.text === "string") return json.text;
       return textFromMessages(json);
+    },
+    extractModel(body) {
+      return modelFromJson(parseJson(body));
     },
   };
 
@@ -278,6 +298,9 @@
       if (typeof json.prompt === "string") return json.prompt;
       if (typeof json.text === "string") return json.text;
       return textFromMessages(json);
+    },
+    extractModel(body) {
+      return modelFromJson(parseJson(body));
     },
   };
 
@@ -435,6 +458,18 @@
     } catch {
       text = "";
     }
+    // Modelo declarado no corpo (quando o site expõe) — o daemon bloqueia se
+    // casar com config.blockedWebModels. Extração best-effort: sem modelo, a
+    // restrição não se aplica a este envio.
+    let model = "";
+    try {
+      model =
+        (typeof adapter.extractModel === "function" &&
+          adapter.extractModel(body)) ||
+        "";
+    } catch {
+      model = "";
+    }
     if (!text) {
       // Envio reconhecido mas sem texto extraível (formato do site mudou/desconhecido).
       // Política FAIL-OPEN (escolha da org): não trava o site — deixa passar e
@@ -444,9 +479,11 @@
         { __guardian: "extract-fail", nonce: NONCE, host: location.hostname },
         "*",
       );
-      return { block: false };
+      // Com modelo presente a restrição de modelo ainda vale: segue para o
+      // scan (texto vazio) só para o veredito de modelo. Sem modelo, fail-open.
+      if (!model) return { block: false };
     }
-    const verdict = await requestScan({ text, context: { url: location.href, tabTitle: document.title } });
+    const verdict = await requestScan({ text, context: { url: location.href, tabTitle: document.title, ...(model ? { model } : {}) } });
     if (verdict.offline) {
       // Não foi possível verificar (daemon offline / sem resposta).
       // Texto puro: FAIL-OPEN (política da org) — não trava o site.

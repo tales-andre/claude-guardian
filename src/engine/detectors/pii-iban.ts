@@ -11,6 +11,7 @@ export const ibanDetector: Detector = {
   label: "IBAN (International Bank Account Number)",
   dataType: "iban",
   severity: "high",
+  pattern: IBAN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(IBAN_RE)) {

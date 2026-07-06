@@ -13,6 +13,7 @@ export const slackTokenDetector: Detector = {
   label: "Slack API Token",
   dataType: "slack-token",
   severity: "high",
+  pattern: TOKEN_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(TOKEN_RE)) {
@@ -37,6 +38,7 @@ export const slackWebhookDetector: Detector = {
   label: "Slack Incoming Webhook URL",
   dataType: "slack-token",
   severity: "high",
+  pattern: WEBHOOK_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(WEBHOOK_RE)) {

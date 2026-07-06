@@ -159,4 +159,14 @@ export const negatives: { name: string; text: string }[] = [
     name: "texto-corrido",
     text: "A reunião de planejamento da frota foi remarcada para quinta-feira, com pauta de orçamento e contratações.",
   },
+  {
+    // FP real de campo: questão de certificação AWS colada num chat — bigramas
+    // Titlecase de produto/termo técnico não são nome de pessoa.
+    name: "questao-certificacao-aws",
+    text:
+      "B. Transit Gateway sharing is useful for central network connectivity, so this is a very realistic distractor. " +
+      "D. StackSets can enforce a standardized VPC pattern across accounts, and AWS Network Manager helps with centralized visibility. " +
+      "The security team requires that Route Tables, Internet Egress, and Network ACLs remain owned by the networking account. " +
+      "Share the required subnets from the networking account to the target OUs by using AWS RAM.",
+  },
 ];

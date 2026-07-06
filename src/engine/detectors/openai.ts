@@ -11,6 +11,7 @@ export const openAiLegacyKeyDetector: Detector = {
   label: "OpenAI API Key (legacy)",
   dataType: "openai-key",
   severity: "critical",
+  pattern: LEGACY_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(LEGACY_KEY_RE)) {
@@ -35,6 +36,7 @@ export const openAiProjectKeyDetector: Detector = {
   label: "OpenAI Project API Key",
   dataType: "openai-key",
   severity: "critical",
+  pattern: PROJECT_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(PROJECT_KEY_RE)) {
@@ -60,6 +62,7 @@ export const anthropicKeyDetector: Detector = {
   label: "Anthropic API Key",
   dataType: "anthropic-key",
   severity: "critical",
+  pattern: ANTHROPIC_KEY_RE.source,
   scan(text: string): DetectorFinding[] {
     const findings: DetectorFinding[] = [];
     for (const m of text.matchAll(ANTHROPIC_KEY_RE)) {

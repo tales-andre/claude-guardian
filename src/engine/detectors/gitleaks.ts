@@ -149,5 +149,8 @@ export const gitleaksDetector: Detector = {
   label: "Gitleaks Secret Scanner",
   dataType: "generic-secret",
   severity: "high",
+  kind: "external",
+  description:
+    "Motor de regras vendorizado (gitleaks) — dispara sub-regras dinâmicas (gl:<RuleID>) que não são enumeráveis estaticamente.",
   scan: scanWithGitleaks,
 };
